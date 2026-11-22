@@ -498,27 +498,33 @@ export default function Home() {
   const inputLooksLikeKujiPage = is1kujiPageUrl(manualUrlInput);
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) setItems(parsed);
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/archive", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (active && Array.isArray(data.items) && data.items.length > 0) {
+            setItems(data.items);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (active) setIsLoaded(true);
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsLoaded(true);
-    }
+    })();
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [items, isLoaded]);
+    if (!isLoaded || !isAdmin || !adminSessionPassword) return;
+    fetch("/api/archive", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: adminSessionPassword, items }),
+    }).catch((e) => console.error(e));
+  }, [items, isLoaded, isAdmin, adminSessionPassword]);
 
   useEffect(() => {
     setActiveSlideIdx(0);
@@ -661,7 +667,7 @@ export default function Home() {
       return 0;
     });
 
-    const [isAdmin, setIsAdmin] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false); const [adminSessionPassword, setAdminSessionPassword] = useState("");
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [adminAuthError, setAdminAuthError] = useState("");
@@ -717,7 +723,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (res.ok && data.ok) {
-        setIsAdmin(true);
+        setIsAdmin(true); setAdminSessionPassword(adminPasswordInput);
         setIsAdminModalOpen(false);
         setAdminPasswordInput("");
       } else {
@@ -949,7 +955,7 @@ export default function Home() {
       setSearchQuery("");
       setViewingItem(null);
       setLiveKujiResults([]);
-      window.localStorage.removeItem(STORAGE_KEY);
+      if (isAdmin && adminSessionPassword) { fetch("/api/archive", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: adminSessionPassword, items: DEFAULT_ARCHIVE }) }); }
     }
   };
 
