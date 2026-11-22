@@ -379,7 +379,7 @@ async function buildAutoPublishedArticle(
 export default function Home() {
   const DEFAULT_ARCHIVE: ArchiveItem[] = Array.isArray(seedData) && seedData.length > 0 ? (seedData as ArchiveItem[]) : INITIAL_DATA;
   const [items, setItems] = useState<ArchiveItem[]>(DEFAULT_ARCHIVE);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false); const [isAdmin, setIsAdmin] = useState(false); const [adminSessionPassword, setAdminSessionPassword] = useState("");
   const [selectedSeries, setSelectedSeries] = useState("전체");
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [selectedYear, setSelectedYear] = useState("전체 연도");
@@ -667,7 +667,7 @@ export default function Home() {
       return 0;
     });
 
-    const [isAdmin, setIsAdmin] = useState(false); const [adminSessionPassword, setAdminSessionPassword] = useState("");
+    
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
   const [adminAuthError, setAdminAuthError] = useState("");
