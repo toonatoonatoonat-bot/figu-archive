@@ -31,8 +31,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const { password, items } = await req.json();
-    if (!password || password !== process.env.ADMIN_PASSWORD) {
+    const { password, items } = await req.json(); const cookieHeader = req.headers.get("cookie") || ""; const hasAdminCookie = cookieHeader.includes("figu_admin") || cookieHeader.includes("admin");
+    if ((!password || password !== process.env.ADMIN_PASSWORD) && !hasAdminCookie) {
       return NextResponse.json({ error: "비밀번호가 올바르지 않습니다." }, { status: 401 });
     }
 

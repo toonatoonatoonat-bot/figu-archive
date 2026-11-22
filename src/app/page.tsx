@@ -518,11 +518,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!isLoaded || !isAdmin || !adminSessionPassword) return;
+    if (!isLoaded || !isAdmin) return;
     fetch("/api/archive", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: adminSessionPassword, items }),
+      body: JSON.stringify({ password: adminSessionPassword || (typeof window !== "undefined" ? sessionStorage.getItem("figu_admin_pw") || "" : ""), items }),
     }).catch((e) => console.error(e));
   }, [items, isLoaded, isAdmin, adminSessionPassword]);
 
@@ -723,7 +723,7 @@ export default function Home() {
       });
       const data = await res.json();
       if (res.ok && data.ok) {
-        setIsAdmin(true); setAdminSessionPassword(adminPasswordInput);
+        setIsAdmin(true); setAdminSessionPassword(adminPasswordInput); try { sessionStorage.setItem("figu_admin_pw", adminPasswordInput); } catch {}
         setIsAdminModalOpen(false);
         setAdminPasswordInput("");
       } else {
