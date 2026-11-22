@@ -969,7 +969,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <span className="inline-block h-2.5 w-2.5 rounded-full bg-neutral-900" />
-            <h1 onClick={handleSecretLogoClick} className="cursor-default select-none font-bold tracking-tight">FIGU ARCHIVE</h1>
+            <h1 onClick={handleSecretLogoClick} className="cursor-default select-none font-bold tracking-tight">처음 코딩 잡고 16시간 22분 동안 '다음줄' 뺑이쳐서 만든 웹사이트(현재진행형)</h1>
             <span className="hidden rounded border border-neutral-200 bg-neutral-100 px-2 py-0.5 font-mono text-[11px] text-neutral-500 sm:inline-block">
               VER 2.9
             </span>
