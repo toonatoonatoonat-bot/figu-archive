@@ -1011,7 +1011,7 @@ export default function Home() {
           </p>
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
             <h2 className="max-w-2xl text-2xl font-bold tracking-tight text-neutral-900 md:text-3xl">
-              <span className="block">처음 코딩 잡고 ai 치트키 써서</span><span className="block">13시간 52분 컷 한 웹사이트</span>
+              <span className="block">처음 코딩 잡고 16시간 22분 동안</span><span className="block">뺑이쳐서 만든 웹사이트(현재진행형)</span>
             </h2>
             {isAdmin && (
               <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
