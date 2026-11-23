@@ -93,24 +93,34 @@ async function fetchAutoAssortSpec(pageTitle: string, prizes: string[]) {
 
   if (cleanTitle) {
     try {
-      const q = encodeURIComponent(`一番くじ ${cleanTitle} アソート`);
-      const res = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
-        headers: { "User-Agent": USER_AGENT },
-        signal: AbortSignal.timeout(4500),
-      });
-      if (res.ok) {
-        const searchHtml = await res.text();
-        const searchText = stripHtml(searchHtml);
+      const queries = [
+        `一番くじ ${cleanTitle} アソート 内訳`,
+        `site:x.com 一番くじ ${cleanTitle} アソート`,
+      ];
 
-        const lotMatch = searchText.match(/(?:1ロット|全|計|総数)\s*([6-9][0-9]|100)\s*(?:本|個|枚)/);
+      const responses = await Promise.allSettled(
+        queries.map((rawQ) =>
+          fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(rawQ)}`, {
+            headers: { "User-Agent": USER_AGENT },
+            signal: AbortSignal.timeout(5000),
+          }).then((r) => (r.ok ? r.text() : ""))
+        )
+      );
+
+      const combinedText = responses
+        .map((r) => (r.status === "fulfilled" ? stripHtml(r.value) : ""))
+        .join(" ");
+
+      if (combinedText.trim()) {
+        const lotMatch = combinedText.match(/(?:1ロット|ロット|全|計|総数)\s*([6-9][0-9]|100)\s*(?:本|個|枚)/);
         if (lotMatch) {
           lotTotal = `${lotMatch[1]}개`;
         }
 
         const gradeCountMap = new Map<string, string>();
-        const countRegex = /([A-Z]賞|ラストワン賞)\s*[:：]?\s*([1-9][0-9]?)\s*(?:本|個|体|枚)/g;
+        const countRegex = /([A-Z]賞|ラストワン賞)\s*[:：・＝=]?\s*([1-9][0-9]?)\s*(?:本|個|体|枚|枠)?/g;
         let m: RegExpExecArray | null;
-        while ((m = countRegex.exec(searchText)) !== null) {
+        while ((m = countRegex.exec(combinedText)) !== null) {
           const g = m[1].replace("賞", "상").replace("ラストワン", "라스트원");
           const c = Number(m[2]);
           if (c > 0 && c <= 30 && !gradeCountMap.has(g)) {
@@ -120,7 +130,7 @@ async function fetchAutoAssortSpec(pageTitle: string, prizes: string[]) {
 
         if (gradeCountMap.size >= 2) {
           prizeCounts = Array.from(gradeCountMap.values()).join(" / ");
-          if (!lotTotal) lotTotal = "80개 (추정)";
+          if (!lotTotal) lotTotal = "80개 (실시간 조회)";
         }
       }
     } catch {

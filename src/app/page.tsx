@@ -494,11 +494,11 @@ export default function Home() {
           id: oldItem.id,
           code: oldItem.code,
           hidden: oldItem.hidden,
-          lotTotal: oldItem.lotTotal || fresh.lotTotal,
+          lotTotal: (oldItem.lotTotal && !oldItem.lotTotal.includes("표준 기준") && !oldItem.lotTotal.includes("추정")) ? oldItem.lotTotal : (fresh.lotTotal || oldItem.lotTotal),
           maxPerTry: oldItem.maxPerTry || fresh.maxPerTry,
           offlineOpenDate: oldItem.offlineOpenDate || fresh.offlineOpenDate,
           onlineOpenDate: oldItem.onlineOpenDate || fresh.onlineOpenDate,
-          prizeCounts: oldItem.prizeCounts || fresh.prizeCounts,
+          prizeCounts: (oldItem.prizeCounts && !oldItem.prizeCounts.includes("추정")) ? oldItem.prizeCounts : (fresh.prizeCounts || oldItem.prizeCounts),
         });
       }
 
@@ -1693,14 +1693,24 @@ export default function Home() {
             </div>
 
                         <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-4 text-xs">
-              <a
-                href={`https://jp.mercari.com/search?keyword=${encodeURIComponent(viewingItem.title)}&status=sold_out`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 font-semibold text-red-700 hover:bg-red-100"
-              >
-                메루카리 솔드아웃 시세 ↗
-              </a>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={`https://jp.mercari.com/search?keyword=${encodeURIComponent(viewingItem.title)}&status=sold_out`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-semibold text-red-700 hover:bg-red-100"
+                >
+                  메루카리 솔드아웃 시세 ↗
+                </a>
+                <a
+                  href={`https://x.com/search?q=${encodeURIComponent(`${viewingItem.title} アソート`)}&f=live`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 rounded-lg border border-neutral-300 bg-neutral-100 px-3 py-2 font-semibold text-neutral-800 hover:bg-neutral-200"
+                >
+                  X(트위터) 어소트 검색 ↗
+                </a>
+              </div>
               <div className="flex items-center gap-2">
               {isAdmin && (<button
                 type="button"
