@@ -270,6 +270,7 @@ async function buildAutoPublishedArticle(
   let storeText = "";
   let description = "";
   let prizes: string[] = [];
+  let autoPriceText = "";
   let autoLotTotal = "";
   let autoMaxPerTry = "";
   let autoOnlineOpenDate = "";
@@ -294,6 +295,8 @@ async function buildAutoPublishedArticle(
       if (detail.priceText) priceText = detail.priceText;
       if (detail.storeText) storeText = detail.storeText;
       if (detail.description) description = detail.description;
+      if (detail.priceText) autoPriceText = detail.priceText;
+      if (detail.priceText) autoPriceText = detail.priceText;
       if (Array.isArray(detail.prizes)) prizes = detail.prizes;
       if (detail.lotTotal) autoLotTotal = detail.lotTotal;
       if (detail.maxPerTry) autoMaxPerTry = detail.maxPerTry;
@@ -374,7 +377,6 @@ async function buildAutoPublishedArticle(
     `• 발매 일정: ${koReleaseText}`,
     `• 권장 가격: ${koPriceText}`,
   ];
-  if (koStoreText) contentLines.push(`• 주요 취급점: ${koStoreText}`);
   contentLines.push(`• 공식 페이지: ${kuji.sourceUrl}`);
   if (koDescription) contentLines.push(``, `■ 공식 소개`, koDescription);
   if (koPrizes.length > 0) {
@@ -391,7 +393,7 @@ async function buildAutoPublishedArticle(
     maker: "반다이 스피리츠 (이치방쿠지)",
     scale: koPrizes.length > 0 ? `경품 ${koPrizes.length}종 라인업` : "경품 라인업 (논스케일)",
     releaseDate: kuji.releaseDate,
-    price: kuji.price,
+    price: autoPriceText || (kuji.price && kuji.price !== "이치방쿠지" ? kuji.price : "가격 미정"),
     summary: `[이치방쿠지 신작 리포트] ${kuji.releaseDate} 발매 예정 · ${topPrizesPreview} 등 총 ${images.length}컷 피규어 화보 수록.`,
     content: contentLines.join("\n"),
     images,
@@ -1626,7 +1628,7 @@ export default function Home() {
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
                   {viewingItem.price && (
                     <div>
-                      <span className="block text-[11px] text-neutral-400">1회 가격 / 등급</span>
+                      <span className="block text-[11px] text-neutral-400">1회 가격</span>
                       <span className="font-semibold text-neutral-900">{viewingItem.price}</span>
                     </div>
                   )}
