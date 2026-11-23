@@ -270,6 +270,10 @@ async function buildAutoPublishedArticle(
   let storeText = "";
   let description = "";
   let prizes: string[] = [];
+  let autoLotTotal = "";
+  let autoMaxPerTry = "";
+  let autoOnlineOpenDate = "";
+  let autoPrizeCounts = "";
 
   try {
     const res = await fetch(`/api/kuji-detail?url=${encodeURIComponent(kuji.sourceUrl)}`);
@@ -291,6 +295,10 @@ async function buildAutoPublishedArticle(
       if (detail.storeText) storeText = detail.storeText;
       if (detail.description) description = detail.description;
       if (Array.isArray(detail.prizes)) prizes = detail.prizes;
+      if (detail.lotTotal) autoLotTotal = detail.lotTotal;
+      if (detail.maxPerTry) autoMaxPerTry = detail.maxPerTry;
+      if (detail.onlineOpenDate) autoOnlineOpenDate = detail.onlineOpenDate;
+      if (detail.prizeCounts) autoPrizeCounts = detail.prizeCounts;
     }
   } catch {
     // 기본 데이터 유지
@@ -388,6 +396,11 @@ async function buildAutoPublishedArticle(
     content: contentLines.join("\n"),
     images,
     imageUrl: images[0] || "",
+    lotTotal: autoLotTotal,
+    maxPerTry: autoMaxPerTry,
+    offlineOpenDate: kuji.releaseDate,
+    onlineOpenDate: autoOnlineOpenDate,
+    prizeCounts: autoPrizeCounts,
   };
 }
 
@@ -466,6 +479,11 @@ export default function Home() {
           id: oldItem.id,
           code: oldItem.code,
           hidden: oldItem.hidden,
+          lotTotal: oldItem.lotTotal || fresh.lotTotal,
+          maxPerTry: oldItem.maxPerTry || fresh.maxPerTry,
+          offlineOpenDate: oldItem.offlineOpenDate || fresh.offlineOpenDate,
+          onlineOpenDate: oldItem.onlineOpenDate || fresh.onlineOpenDate,
+          prizeCounts: oldItem.prizeCounts || fresh.prizeCounts,
         });
       }
 

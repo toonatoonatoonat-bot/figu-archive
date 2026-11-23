@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
@@ -80,6 +80,72 @@ async function isLargeEnoughImage(url: string): Promise<boolean> {
 interface ScoredImage {
   url: string;
   score: number;
+}
+
+async function fetchAutoAssortSpec(pageTitle: string, prizes: string[]) {
+  let lotTotal = "";
+  let prizeCounts = "";
+
+  const cleanTitle = pageTitle
+    .replace(/^一番くじ\s*/, "")
+    .replace(/[-|｜].*$/, "")
+    .trim();
+
+  if (cleanTitle) {
+    try {
+      const q = encodeURIComponent(`一番くじ ${cleanTitle} アソート`);
+      const res = await fetch(`https://html.duckduckgo.com/html/?q=${q}`, {
+        headers: { "User-Agent": USER_AGENT },
+        signal: AbortSignal.timeout(4500),
+      });
+      if (res.ok) {
+        const searchHtml = await res.text();
+        const searchText = stripHtml(searchHtml);
+
+        const lotMatch = searchText.match(/(?:1ロット|全|計|総数)\s*([6-9][0-9]|100)\s*(?:本|個|枚)/);
+        if (lotMatch) {
+          lotTotal = `${lotMatch[1]}개`;
+        }
+
+        const gradeCountMap = new Map<string, string>();
+        const countRegex = /([A-Z]賞|ラストワン賞)\s*[:：]?\s*([1-9][0-9]?)\s*(?:本|個|体|枚)/g;
+        let m: RegExpExecArray | null;
+        while ((m = countRegex.exec(searchText)) !== null) {
+          const g = m[1].replace("賞", "상").replace("ラストワン", "라스트원");
+          const c = Number(m[2]);
+          if (c > 0 && c <= 30 && !gradeCountMap.has(g)) {
+            gradeCountMap.set(g, `${g} ${c}개`);
+          }
+        }
+
+        if (gradeCountMap.size >= 2) {
+          prizeCounts = Array.from(gradeCountMap.values()).join(" / ");
+          if (!lotTotal) lotTotal = "80개 (추정)";
+        }
+      }
+    } catch {
+      // 외부 검색 타임아웃 시 기본 추정치로 폴백
+    }
+  }
+
+  if (!prizeCounts && prizes.length > 0) {
+    const grades = prizes
+      .map((p) => p.split(":")[0].trim())
+      .filter((g) => /^[A-Z]賞$|ラストワン賞/.test(g));
+
+    if (grades.length > 0) {
+      const estimated = grades.map((g) => {
+        const koG = g.replace("賞", "상").replace("ラストワン", "라스트원");
+        if (koG === "라스트원상") return "라스트원 1개";
+        if (/^[ABC]상$/.test(koG)) return `${koG} 2개(추정)`;
+        return `${koG} 다수`;
+      });
+      prizeCounts = `${estimated.join(" / ")} ※공식 미공개 추정치`;
+      if (!lotTotal) lotTotal = "80개 (표준 기준)";
+    }
+  }
+
+  return { lotTotal, prizeCounts };
 }
 
 export async function GET(request: NextRequest) {
@@ -244,10 +310,22 @@ export async function GET(request: NextRequest) {
     );
     const finalImages = sizeChecks.filter((item) => item.ok).map((item) => item.url);
 
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const pageTitle = titleMatch ? stripHtml(titleMatch[1]) : "";
+
+    const onlineMatch = plainText.match(/(?:一番くじONLINE|オンライン販売)[^■●\n]{0,40}?(20[2-3][0-9]年[0-9]{1,2}月[0-9]{1,2}日[^■●\n]{0,20})/);
+    const maxTryMatch = plainText.match(/(?:1会計につき|お一人様)\s*([0-9]+回まで)/);
+
+    const { lotTotal, prizeCounts } = await fetchAutoAssortSpec(pageTitle, prizes);
+
     return NextResponse.json({
       releaseText: releaseMatch?.[1]?.trim() || "",
       priceText: priceMatch?.[1]?.trim() || "",
       storeText: storeMatch?.[1]?.trim() || "",
+      onlineOpenDate: onlineMatch?.[1]?.trim() || "",
+      maxPerTry: maxTryMatch?.[1]?.trim() || "",
+      lotTotal,
+      prizeCounts,
       description,
       prizes,
       images: finalImages,
