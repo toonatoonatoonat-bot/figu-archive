@@ -846,7 +846,7 @@ export default function Home() {
         return;
       }
       const list: KujiLiveItem[] = Array.isArray(data.items) ? data.items : [];
-      setLiveKujiResults(list);
+      setLiveKujiResults(list); setLiveResultBrandTab(activeBrand); setLiveKujiPage(0);
       setLiveKujiLabel(data.query || (q || "2026~2027 최신 전체"));
       if (list.length === 0) setLiveKujiError("일치하는 최신 이치방쿠지 라인업이 없습니다.");
     } catch {
@@ -1455,7 +1455,17 @@ export default function Home() {
           </div>
         </div>
 
-        {(liveKujiResults.length > 0 || liveKujiError) && (
+        {(liveKujiResults.length > 0 || liveKujiError) && (() => {
+          const filteredLiveKujiResults =
+            liveResultBrandTab === "전체"
+              ? liveKujiResults
+              : liveKujiResults.filter(
+                  (k) =>
+                    (k.kujiBrand ||
+                      resolveItemKujiBrand({ title: k.title, content: k.sourceUrl })) ===
+                    liveResultBrandTab
+                );
+          return (
           <section className="mb-8 rounded-2xl border border-amber-300 bg-amber-50/50 p-5">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -1474,8 +1484,8 @@ export default function Home() {
                     onClick={() => {
                       const startIdx = liveKujiPage * 9;
                       const orderedFromCurrentSlide = [
-                        ...liveKujiResults.slice(startIdx),
-                        ...liveKujiResults.slice(0, startIdx),
+                        ...filteredLiveKujiResults.slice(startIdx),
+                        ...filteredLiveKujiResults.slice(0, startIdx),
                       ];
                       handleBatchAutoPublish(orderedFromCurrentSlide);
                     }}
@@ -1497,17 +1507,48 @@ export default function Home() {
               </div>
             </div>
 
+            <div className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-amber-200/80 pb-3">
+              {(["전체", ...KUJI_BRAND_LIST] as const).map((bName) => {
+                const bCount =
+                  bName === "전체"
+                    ? liveKujiResults.length
+                    : liveKujiResults.filter(
+                        (k) =>
+                          (k.kujiBrand ||
+                            resolveItemKujiBrand({ title: k.title, content: k.sourceUrl })) ===
+                          bName
+                      ).length;
+                return (
+                  <button
+                    key={bName}
+                    type="button"
+                    onClick={() => {
+                      setLiveResultBrandTab(bName);
+                      setLiveKujiPage(0);
+                    }}
+                    className={`rounded-full border px-3 py-1 text-xs font-bold transition ${
+                      liveResultBrandTab === bName
+                        ? "border-amber-900 bg-amber-900 text-white"
+                        : "border-amber-300 bg-white text-amber-950 hover:bg-amber-100"
+                    }`}
+                  >
+                    {bName} ({bCount})
+                  </button>
+                );
+              })}
+            </div>
+
             {liveKujiError && (
               <p className="rounded-lg border border-red-200 bg-white px-3.5 py-2.5 text-xs text-red-600">
                 ⚠️ {liveKujiError}
               </p>
             )}
 
-            {liveKujiResults.length > 0 && (() => {
+            {filteredLiveKujiResults.length > 0 && (() => {
               const KUJI_PER_PAGE = 9;
-              const totalKujiPages = Math.max(1, Math.ceil(liveKujiResults.length / KUJI_PER_PAGE));
+              const totalKujiPages = Math.max(1, Math.ceil(filteredLiveKujiResults.length / KUJI_PER_PAGE));
               const safeKujiPage = Math.min(liveKujiPage, totalKujiPages - 1);
-              const paginatedLiveKujiResults = liveKujiResults.slice(
+              const paginatedLiveKujiResults = filteredLiveKujiResults.slice(
                 safeKujiPage * KUJI_PER_PAGE,
                 (safeKujiPage + 1) * KUJI_PER_PAGE
               );
@@ -1515,10 +1556,10 @@ export default function Home() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between px-1 text-xs text-amber-900/80">
                     <span>
-                      전체 <strong className="text-amber-950">{liveKujiResults.length}건</strong> 중{" "}
+                      선택 브랜드 <strong className="text-amber-950">{filteredLiveKujiResults.length}건</strong> 중{" "}
                       <strong className="text-amber-700">
                         {safeKujiPage * KUJI_PER_PAGE + 1}~
-                        {Math.min((safeKujiPage + 1) * KUJI_PER_PAGE, liveKujiResults.length)}번째
+                        {Math.min((safeKujiPage + 1) * KUJI_PER_PAGE, filteredLiveKujiResults.length)}번째
                       </strong>{" "}
                       표시 중
                     </span>
