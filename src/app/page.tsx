@@ -544,6 +544,7 @@ export default function Home() {
   const [selectedSeries, setSelectedSeries] = useState("전체");
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [selectedYear, setSelectedYear] = useState("전체 연도");
+  const [selectedReleaseStatus, setSelectedReleaseStatus] = useState<"전체" | "발매 시즌" | "발매 예정" | "발매 완료">("전체");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortType>("latest");
 
@@ -864,6 +865,9 @@ export default function Home() {
       const matchCategory = selectedCategory === "전체" || item.category === selectedCategory;
       const matchYear =
         selectedYear === "전체 연도" || extractYear(item.releaseDate) === selectedYear;
+      const itemReleaseStatus = getReleaseStatusBadge(item.releaseDate)?.label;
+      const matchReleaseStatus =
+        selectedReleaseStatus === "전체" || itemReleaseStatus === selectedReleaseStatus;
       const kw = searchQuery.trim().toLowerCase();
       const matchSearch =
         kw === "" ||
@@ -873,7 +877,7 @@ export default function Home() {
         item.code.toLowerCase().includes(kw) ||
         item.releaseDate.toLowerCase().includes(kw) ||
         item.summary.toLowerCase().includes(kw);
-      return matchSeries && matchCategory && matchYear && matchSearch;
+      return matchSeries && matchCategory && matchYear && matchReleaseStatus && matchSearch;
     })
     .sort((a, b) => {
       if (sortBy === "code") return a.code.localeCompare(b.code);
@@ -1187,6 +1191,7 @@ export default function Home() {
       setSelectedSeries("전체");
       setSelectedCategory("전체");
       setSelectedYear("전체 연도");
+      setSelectedReleaseStatus("전체");
       setSearchQuery("");
       setViewingItem(null);
       setLiveKujiResults([]);
@@ -1601,6 +1606,46 @@ export default function Home() {
                 }`}
               >
                 {year === "전체 연도" ? `전체 (${count})` : `${year}년 (${count})`}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mb-8 -mt-5 flex flex-wrap items-center gap-2 border-t border-neutral-200/70 pt-3">
+          <span className="mr-1 font-mono text-[11px] font-semibold text-neutral-400">STATUS:</span>
+          {(["전체", "발매 시즌", "발매 예정", "발매 완료"] as const).map((statusLabel) => {
+            const visibleItems = items.filter((it) => !it.hidden);
+            const count =
+              statusLabel === "전체"
+                ? visibleItems.length
+                : visibleItems.filter((it) => getReleaseStatusBadge(it.releaseDate)?.label === statusLabel).length;
+
+            const activeStyle =
+              statusLabel === "발매 시즌"
+                ? "border-rose-600 bg-rose-600 text-white"
+                : statusLabel === "발매 예정"
+                ? "border-indigo-600 bg-indigo-600 text-white"
+                : statusLabel === "발매 완료"
+                ? "border-neutral-800 bg-neutral-800 text-white"
+                : "border-neutral-900 bg-neutral-900 text-white";
+
+            const inactiveStyle =
+              statusLabel === "발매 시즌"
+                ? "border-rose-200 bg-rose-50/70 text-rose-700 hover:border-rose-400"
+                : statusLabel === "발매 예정"
+                ? "border-indigo-200 bg-indigo-50/70 text-indigo-700 hover:border-indigo-400"
+                : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400";
+
+            return (
+              <button
+                key={statusLabel}
+                type="button"
+                onClick={() => setSelectedReleaseStatus(statusLabel)}
+                className={`rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                  selectedReleaseStatus === statusLabel ? activeStyle : inactiveStyle
+                }`}
+              >
+                {statusLabel} ({count})
               </button>
             );
           })}
