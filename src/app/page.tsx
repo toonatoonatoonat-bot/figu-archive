@@ -583,7 +583,7 @@ async function buildAutoPublishedArticle(
     scale: koPrizes.length > 0 ? `경품 ${koPrizes.length}종 라인업` : "경품 라인업 (논스케일)",
     releaseDate: kuji.releaseDate,
     price: autoPriceText || (kuji.price && kuji.price !== "이치방쿠지" ? kuji.price : "가격 미정"),
-    summary: `[이치방쿠지 신작 리포트] ${kuji.releaseDate} 발매 예정 · ${topPrizesPreview} 등 총 ${images.length}컷 피규어 화보 수록.`,
+    summary: `[${detectedBrand} 신작 리포트] ${kuji.releaseDate} 발매 예정 · ${topPrizesPreview} 등 총 ${images.length}컷 피규어 화보 수록.`,
     content: contentLines.join("\n"),
     images,
     imageUrl: images[0] || "",
@@ -700,6 +700,7 @@ export default function Home() {
 
   const [isLiveSearchingKuji, setIsLiveSearchingKuji] = useState(false);
   const [liveKujiResults, setLiveKujiResults] = useState<KujiLiveItem[]>([]);
+  const [liveSearchBrand, setLiveSearchBrand] = useState<"전체" | KujiBrandType>("전체");
   const [liveKujiPage, setLiveKujiPage] = useState(0);
   const [liveKujiLabel, setLiveKujiLabel] = useState<string | null>(null);
   const [liveKujiError, setLiveKujiError] = useState<string | null>(null);
@@ -814,7 +815,7 @@ export default function Home() {
     setIsLiveSearchingKuji(true);
     setLiveKujiError(null);
     try {
-      const res = await fetch(`/api/kuji-search?q=${encodeURIComponent(q)}`);
+      const res = await fetch(`/api/kuji-search?q=${encodeURIComponent(q)}&brand=${encodeURIComponent(liveSearchBrand)}`);
       const data = await res.json();
       if (!res.ok) {
         setLiveKujiError(data.error || "1kuji.com 최신 정보를 가져오지 못했습니다.");
@@ -845,16 +846,16 @@ export default function Home() {
 
   const handleBatchAutoPublish = async (sourceCandidates?: KujiLiveItem[]) => {
     setIsAutoPublishing(true);
-    setPublishProgressText("⏳ 1kuji.com 최신 신작 목록을 조회하는 중...");
+    setPublishProgressText(`⏳ ${liveSearchBrand === "전체" ? "전 브랜드(이치방쿠지·세가·후류·산리오·타이토·해피·애니쿠지)" : liveSearchBrand} 최신 신작 목록을 조회하는 중...`);
     try {
       let targetList: KujiLiveItem[] = [];
       if (sourceCandidates && sourceCandidates.length > 0) {
         targetList = [...sourceCandidates];
       } else {
-        const res = await fetch("/api/kuji-search?q=");
+        const res = await fetch(`/api/kuji-search?q=&brand=${encodeURIComponent(liveSearchBrand)}`);
         const data = await res.json();
         if (!res.ok || !Array.isArray(data.items)) {
-          setPublishProgressText("⚠️ 최신 이치방쿠지 목록을 불러오지 못했습니다.");
+          setPublishProgressText("⚠️ 최신 쿠지 신작 목록을 불러오지 못했습니다.");
           return;
         }
         targetList = data.items as KujiLiveItem[];
@@ -869,8 +870,8 @@ export default function Home() {
         const kujiIdx = raw.indexOf("一番くじ");
         const pureJp = (kujiIdx >= 0 ? raw.slice(kujiIdx) : raw).trim().toLowerCase();
         const srcUrl = (k.sourceUrl || "").trim().toLowerCase();
-        if (pureJp && existingBlob.includes(pureJp)) return true;
         if (srcUrl && existingBlob.includes(srcUrl)) return true;
+        if (pureJp && pureJp.length >= 6 && existingBlob.includes(pureJp)) return true;
         return false;
       };
 
