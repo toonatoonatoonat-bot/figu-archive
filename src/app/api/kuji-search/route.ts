@@ -551,11 +551,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 7. 애니쿠지 (animate-onlineshop.jp + PR TIMES 공식 보도자료)
+    // 7. 애니쿠지 / 쿠지메이트 (Animate 공식 복권 라인업)
     if (brandFilter === "전체" || brandFilter === "애니쿠지") {
       fetchTasks.push(
         fetchText(
-          `https://www.animate-onlineshop.jp/products/list.php?mode=search&smt=${encodeURIComponent(`アニくじ ${jpQuery}`.trim())}`,
+          `https://www.animate-onlineshop.jp/products/list.php?mode=search&smt=${encodeURIComponent(`くじメイト ${jpQuery}`.trim())}`,
           "https://www.animate-onlineshop.jp/"
         )
           .then((html) =>
@@ -564,15 +564,24 @@ export async function GET(request: NextRequest) {
               linkPattern: /<a[^>]+href=["'](\/pn\/[^"']*?([a-zA-Z0-9_-]+)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi,
               slugPrefix: "anikuji",
               kujiBrand: "애니쿠지",
-              maker: "Animate (애니메이트)",
-              defaultSeries: "애니쿠지 라인업",
-              titleKeywordFilter: /アニくじ/,
+              maker: "Animate (애니메이트 / 쿠지메이트)",
+              defaultSeries: "애니쿠지 · 쿠지메이트",
+              titleKeywordFilter: /アニくじ|くじメイト/,
             })
           )
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaPrTimes(`アニくじ アニメイト ${jpQuery}`.trim(), {
+        searchBrandViaPrTimes(`くじメイト アニメイト ${jpQuery}`.trim(), {
+          slugPrefix: "anikuji",
+          kujiBrand: "애니쿠지",
+          maker: "Animate (애니메이트 / 쿠지메이트)",
+          defaultSeries: "애니쿠지 · 쿠지메이트",
+          mustMatchTitle: /くじメイト|アニくじ/,
+        })
+      );
+      fetchTasks.push(
+        searchBrandViaPrTimes(`アニくじ ${jpQuery}`.trim(), {
           slugPrefix: "anikuji",
           kujiBrand: "애니쿠지",
           maker: "Animate (애니메이트)",
