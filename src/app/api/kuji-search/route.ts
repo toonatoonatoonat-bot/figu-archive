@@ -95,7 +95,7 @@ function guessKoreanSeries(title: string, defaultSeries = "쿠지 라인업"): s
     [/ポケモン|ポケットモンスター/i, "포켓몬스터"],
     [/ちいかわ/i, "치이카와"],
     [/カービィ/i, "별의 커비"],
-    [/サンリオ|ハローキティ|シナモロール|クロミ|マイメロディ|ポムポムプリン/i, "산리오 캐릭터즈"],
+    [/サンリオ|ハローキティ|シナモロール|クロミ|マイメロディ|ポムポムプリン|ハンギョドン|ポチャッコ/i, "산리오 캐릭터즈"],
     [/ワンパンマン/i, "원펀맨"],
     [/進撃の巨人/i, "진격의 거인"],
     [/ハイキュー/i, "하이큐!!"],
@@ -103,6 +103,11 @@ function guessKoreanSeries(title: string, defaultSeries = "쿠지 라인업"): s
     [/コナン/i, "명탐정 코난"],
     [/初音ミク|ミク/i, "하츠네 미쿠"],
     [/マーベル|MARVEL|スパイダーマン/i, "마블 코믹스"],
+    [/プロセカ|プロジェクトセカイ/i, "프로젝트 세카이"],
+    [/ダンガンロンパ/i, "단간론파"],
+    [/刀剣乱舞/i, "도검난무"],
+    [/あんさんぶるスターズ|あんスタ/i, "앙상블 스타즈!!"],
+    [/ハイキュー/i, "하이큐!!"],
   ];
 
   for (const [pattern, ko] of map) {
@@ -121,8 +126,8 @@ function getDateSortScore(releaseDate: string): number {
 }
 
 function extractDateString(rawText: string, fallbackDate: string): string {
-  const fullDateMatch = rawText.match(/(20\d{2})年(\d{1,2})月(\d{1,2})日/);
-  const monthOnlyMatch = rawText.match(/(20\d{2})年(\d{1,2})月/);
+  const fullDateMatch = rawText.match(/(20\d{2})[年./-](\d{1,2})[月./-](\d{1,2})/);
+  const monthOnlyMatch = rawText.match(/(20\d{2})[年./-](\d{1,2})/);
   if (fullDateMatch) {
     return `${fullDateMatch[1]}.${fullDateMatch[2].padStart(2, "0")}.${fullDateMatch[3].padStart(2, "0")}`;
   }
@@ -202,8 +207,8 @@ function parseGenericBrandHtml(
     if (!idToken || seen.has(slug)) continue;
 
     const anchorInner = match[match.length - 1] || "";
-    const startCtx = Math.max(0, match.index - 220);
-    const endCtx = Math.min(html.length, match.index + match[0].length + 320);
+    const startCtx = Math.max(0, match.index - 240);
+    const endCtx = Math.min(html.length, match.index + match[0].length + 340);
     const contextBlock = html.slice(startCtx, endCtx);
 
     const imgMatch =
@@ -252,77 +257,83 @@ function parseGenericBrandHtml(
   return results;
 }
 
-// 공홈 직접 크롤링 외에 공식 도메인 인덱스에서 실시간 상품 링크를 보충 수집하는 폴백
 async function searchBrandViaWebIndex(
-  domain: string,
-  jpBrandKeyword: string,
-  jpQuery: string,
+  queries: string[],
+  allowedDomainPattern: RegExp,
   config: {
     slugPrefix: string;
     kujiBrand: KujiBrandName;
     maker: string;
     defaultSeries: string;
+    mustMatchTitle?: RegExp;
   }
 ): Promise<KujiLiveProduct[]> {
-  try {
-    const q = `site:${domain} ${jpBrandKeyword} ${jpQuery}`.trim();
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
-      headers: { "User-Agent": USER_AGENT },
-      signal: AbortSignal.timeout(6500),
-    });
-    if (!res.ok) return [];
-    const html = await res.text();
+  const results: KujiLiveProduct[] = [];
+  const seen = new Set<string>();
 
-    const results: KujiLiveProduct[] = [];
-    const seen = new Set<string>();
-    const itemRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-    let m: RegExpExecArray | null;
+  await Promise.allSettled(
+    queries.map(async (q) => {
+      try {
+        const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(q)}`, {
+          headers: {
+            "User-Agent": USER_AGENT,
+            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
+          },
+          signal: AbortSignal.timeout(6500),
+        });
+        if (!res.ok) return;
+        const html = await res.text();
 
-    while ((m = itemRegex.exec(html)) !== null) {
-      let href = m[1];
-      const uddgMatch = href.match(/uddg=([^&]+)/);
-      if (uddgMatch) {
-        try {
-          href = decodeURIComponent(uddgMatch[1]);
-        } catch {}
-      }
-      if (!href.includes(domain)) continue;
+        const itemRegex = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+        let m: RegExpExecArray | null;
 
-      const title = stripHtml(m[2])
-        .replace(/\s*[|｜\-–]\s*(?:セガプラザ|みんなのくじ|タイトー|Happyくじ|サンリオ|アニメイト).*$/i, "")
-        .trim();
-      if (!title || title.length < 5) continue;
+        while ((m = itemRegex.exec(html)) !== null) {
+          let href = m[1];
+          const uddgMatch = href.match(/uddg=([^&]+)/);
+          if (uddgMatch) {
+            try {
+              href = decodeURIComponent(uddgMatch[1]);
+            } catch {}
+          }
+          if (!allowedDomainPattern.test(href)) continue;
 
-      const idToken = href.replace(/[^a-zA-Z0-9_-]/g, "").slice(-24);
-      const slug = `${config.slugPrefix}-idx-${idToken}`;
-      if (seen.has(slug)) continue;
-      seen.add(slug);
+          const title = stripHtml(m[2])
+            .replace(/\s*[|｜\-–]\s*(?:セガプラザ|みんなのくじ|タイトー|Happyくじ|サンリオ|アニメイト|PR TIMES).*$/i, "")
+            .trim();
+          if (!title || title.length < 5) continue;
+          if (config.mustMatchTitle && !config.mustMatchTitle.test(title)) continue;
 
-      const snippetBlock = stripHtml(html.slice(m.index, Math.min(html.length, m.index + 600)));
-      const dateStr = extractDateString(snippetBlock, "발매 예정");
-      const priceMatch = snippetBlock.match(/1回\s*([0-9,]+円)/);
+          const idToken = href.replace(/[^a-zA-Z0-9_-]/g, "").slice(-28);
+          const slug = `${config.slugPrefix}-idx-${idToken}`;
+          if (seen.has(slug)) continue;
+          seen.add(slug);
 
-      results.push({
-        slug,
-        kujiBrand: config.kujiBrand,
-        maker: config.maker,
-        title,
-        series: guessKoreanSeries(title, config.defaultSeries),
-        releaseDate: dateStr,
-        price: priceMatch ? `1회 ${priceMatch[1]}` : config.kujiBrand,
-        imageUrl: "",
-        sourceUrl: href,
-        isUpcoming: true,
-      });
-    }
-    return results;
-  } catch {
-    return [];
-  }
+          const snippetBlock = stripHtml(html.slice(m.index, Math.min(html.length, m.index + 650)));
+          const dateStr = extractDateString(snippetBlock, "최신 라인업");
+          const priceMatch = snippetBlock.match(/1回\s*([0-9,]+円)/);
+
+          results.push({
+            slug,
+            kujiBrand: config.kujiBrand,
+            maker: config.maker,
+            title,
+            series: guessKoreanSeries(title, config.defaultSeries),
+            releaseDate: dateStr,
+            price: priceMatch ? `1회 ${priceMatch[1]}` : config.kujiBrand,
+            imageUrl: "",
+            sourceUrl: href,
+            isUpcoming: true,
+          });
+        }
+      } catch {}
+    })
+  );
+
+  return results;
 }
 
 async function hydrateMissingThumbnails(items: KujiLiveProduct[]): Promise<KujiLiveProduct[]> {
-  const targets = items.filter((it) => !it.imageUrl && it.sourceUrl).slice(0, 18);
+  const targets = items.filter((it) => !it.imageUrl && it.sourceUrl).slice(0, 24);
   if (targets.length === 0) return items;
 
   const urlToImg = new Map<string, string>();
@@ -404,22 +415,31 @@ export async function GET(request: NextRequest) {
           .then((html) =>
             parseGenericBrandHtml(html, {
               baseUrl: "https://segaplaza.jp",
-              linkPattern: /<a[^>]+href=["'](\/(?:lp|prize|channel)\/[^"']*?(?:kuji|lottery)[^"']*?([a-zA-Z0-9_-]+)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi,
+              linkPattern: /<a[^>]+href=["'](\/(?:lp|prize|channel)\/[^"']*?([a-zA-Z0-9_-]+)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi,
               slugPrefix: "sega",
               kujiBrand: "세가 럭키 쿠지",
               maker: "SEGA (세가)",
               defaultSeries: "세가 럭키 쿠지 라인업",
+              titleKeywordFilter: /ラッキーくじ|くじ/,
             })
           )
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaWebIndex("segaplaza.jp", "セガラッキーくじ", jpQuery, {
-          slugPrefix: "sega",
-          kujiBrand: "세가 럭키 쿠지",
-          maker: "SEGA (세가)",
-          defaultSeries: "세가 럭키 쿠지 라인업",
-        })
+        searchBrandViaWebIndex(
+          [
+            `site:segaplaza.jp "セガラッキーくじ" ${jpQuery}`.trim(),
+            `site:segaplaza.jp "ラッキーくじ" 2026 ${jpQuery}`.trim(),
+          ],
+          /segaplaza\.jp/i,
+          {
+            slugPrefix: "sega",
+            kujiBrand: "세가 럭키 쿠지",
+            maker: "SEGA (세가)",
+            defaultSeries: "세가 럭키 쿠지 라인업",
+            mustMatchTitle: /ラッキーくじ/,
+          }
+        )
       );
     }
 
@@ -430,7 +450,7 @@ export async function GET(request: NextRequest) {
           .then((html) =>
             parseGenericBrandHtml(html, {
               baseUrl: "https://charahiroba.com",
-              linkPattern: /<a[^>]+href=["'](\/minkuji\/lineup\/detail\/\?id=(\d+)|\/minkuji\/[^"']+?([a-zA-Z0-9_-]+)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi,
+              linkPattern: /<a[^>]+href=["'](\/minkuji\/[^"']+?([a-zA-Z0-9_-]+)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi,
               slugPrefix: "minkuji",
               kujiBrand: "모두의 쿠지",
               maker: "FuRyu (후류)",
@@ -440,16 +460,24 @@ export async function GET(request: NextRequest) {
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaWebIndex("charahiroba.com", "みんなのくじ", jpQuery, {
-          slugPrefix: "minkuji",
-          kujiBrand: "모두의 쿠지",
-          maker: "FuRyu (후류)",
-          defaultSeries: "모두의 쿠지 라인업",
-        })
+        searchBrandViaWebIndex(
+          [
+            `site:charahiroba.com "みんなのくじ" ${jpQuery}`.trim(),
+            `"みんなのくじ" フリュー 2026 ${jpQuery}`.trim(),
+          ],
+          /charahiroba\.com|furyu\.jp/i,
+          {
+            slugPrefix: "minkuji",
+            kujiBrand: "모두의 쿠지",
+            maker: "FuRyu (후류)",
+            defaultSeries: "모두의 쿠지 라인업",
+            mustMatchTitle: /みんなのくじ/,
+          }
+        )
       );
     }
 
-    // 4. 타이토 쿠지 (taito.co.jp/taitokuji)
+    // 4. 타이토 쿠지 (taito.co.jp)
     if (brandFilter === "전체" || brandFilter === "타이토 쿠지") {
       fetchTasks.push(
         fetchText("https://www.taito.co.jp/taitokuji", "https://www.taito.co.jp/")
@@ -466,12 +494,20 @@ export async function GET(request: NextRequest) {
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaWebIndex("taito.co.jp/taitokuji", "タイトーくじ", jpQuery, {
-          slugPrefix: "taito",
-          kujiBrand: "타이토 쿠지",
-          maker: "TAITO (타이토)",
-          defaultSeries: "타이토 쿠지 라인업",
-        })
+        searchBrandViaWebIndex(
+          [
+            `site:taito.co.jp "タイトーくじ" ${jpQuery}`.trim(),
+            `"タイトーくじ" 発売 2026 ${jpQuery}`.trim(),
+          ],
+          /taito\.co\.jp/i,
+          {
+            slugPrefix: "taito",
+            kujiBrand: "타이토 쿠지",
+            maker: "TAITO (타이토)",
+            defaultSeries: "타이토 쿠지 라인업",
+            mustMatchTitle: /タイトーくじ/,
+          }
+        )
       );
     }
 
@@ -492,12 +528,16 @@ export async function GET(request: NextRequest) {
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaWebIndex("h-kuji.com", "Happyくじ", jpQuery, {
-          slugPrefix: "happykuji",
-          kujiBrand: "해피쿠지",
-          maker: "Sunny Side Up (써니사이드업)",
-          defaultSeries: "해피쿠지 라인업",
-        })
+        searchBrandViaWebIndex(
+          [`site:h-kuji.com "Happyくじ" ${jpQuery}`.trim()],
+          /h-kuji\.com/i,
+          {
+            slugPrefix: "happykuji",
+            kujiBrand: "해피쿠지",
+            maker: "Sunny Side Up (써니사이드업)",
+            defaultSeries: "해피쿠지 라인업",
+          }
+        )
       );
     }
 
@@ -519,39 +559,40 @@ export async function GET(request: NextRequest) {
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaWebIndex("sanrio.co.jp", "当たりくじ", jpQuery, {
-          slugPrefix: "sanrio",
-          kujiBrand: "아타리 쿠지",
-          maker: "Sanrio (산리오)",
-          defaultSeries: "산리오 캐릭터즈",
-        })
+        searchBrandViaWebIndex(
+          [
+            `site:sanrio.co.jp "当たりくじ" ${jpQuery}`.trim(),
+            `"サンリオ当たりくじ" 2026 ${jpQuery}`.trim(),
+          ],
+          /sanrio\.co\.jp/i,
+          {
+            slugPrefix: "sanrio",
+            kujiBrand: "아타리 쿠지",
+            maker: "Sanrio (산리오)",
+            defaultSeries: "산리오 캐릭터즈",
+            mustMatchTitle: /当たりくじ/,
+          }
+        )
       );
     }
 
-    // 7. 애니쿠지 (animate-onlineshop.jp)
+    // 7. 애니쿠지 (animate-onlineshop.jp / animatetimes.com)
     if (brandFilter === "전체" || brandFilter === "애니쿠지") {
       fetchTasks.push(
-        fetchText("https://www.animate-onlineshop.jp/corner/cc/anikuji/cd/1287/", "https://www.animate-onlineshop.jp/")
-          .then((html) =>
-            parseGenericBrandHtml(html, {
-              baseUrl: "https://www.animate-onlineshop.jp",
-              linkPattern: /<a[^>]+href=["'](\/(?:pn|products\/detail\.php\?product_id=)[^"']*?([a-zA-Z0-9_-]+)\/?)["'][^>]*>([\s\S]*?)<\/a>/gi,
-              slugPrefix: "anikuji",
-              kujiBrand: "애니쿠지",
-              maker: "Animate (애니메이트)",
-              defaultSeries: "애니쿠지 라인업",
-              titleKeywordFilter: /アニくじ/,
-            })
-          )
-          .catch(() => [])
-      );
-      fetchTasks.push(
-        searchBrandViaWebIndex("animate-onlineshop.jp", "アニくじ", jpQuery, {
-          slugPrefix: "anikuji",
-          kujiBrand: "애니쿠지",
-          maker: "Animate (애니메이트)",
-          defaultSeries: "애니쿠지 라인업",
-        })
+        searchBrandViaWebIndex(
+          [
+            `site:animate-onlineshop.jp "アニくじ" ${jpQuery}`.trim(),
+            `site:animatetimes.com "アニくじ" ${jpQuery}`.trim(),
+          ],
+          /animate-onlineshop\.jp|animatetimes\.com/i,
+          {
+            slugPrefix: "anikuji",
+            kujiBrand: "애니쿠지",
+            maker: "Animate (애니메이트)",
+            defaultSeries: "애니쿠지 라인업",
+            mustMatchTitle: /アニくじ/,
+          }
+        )
       );
     }
 
@@ -584,7 +625,6 @@ export async function GET(request: NextRequest) {
 
     filteredMerged.sort((a, b) => {
       if (brandFilter === "전체" && a.kujiBrand !== b.kujiBrand) {
-        // 전 브랜드 통합 시 각 브랜드가 골고루 상단에 보이도록 정렬
         const order: Record<string, number> = {
           "세가 럭키 쿠지": 1,
           "모두의 쿠지": 2,
@@ -602,7 +642,7 @@ export async function GET(request: NextRequest) {
       return getDateSortScore(b.releaseDate) - getDateSortScore(a.releaseDate);
     });
 
-    const finalSliced = await hydrateMissingThumbnails(filteredMerged.slice(0, 80));
+    const finalSliced = await hydrateMissingThumbnails(filteredMerged.slice(0, 90));
     return NextResponse.json({
       query: jpQuery || `${brandFilter} 통합 라인업`,
       items: finalSliced,

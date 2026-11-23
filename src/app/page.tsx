@@ -846,7 +846,17 @@ export default function Home() {
         return;
       }
       const list: KujiLiveItem[] = Array.isArray(data.items) ? data.items : [];
-      setLiveKujiResults(list); setLiveResultBrandTab(liveSearchBrand); setLiveKujiPage(0);
+      setLiveKujiResults((prev) => {
+        if (activeBrand === "전체") return list;
+        const kept = prev.filter(
+          (item) =>
+            (item.kujiBrand ||
+              resolveItemKujiBrand({ title: item.title, content: item.sourceUrl })) !== activeBrand
+        );
+        return [...list, ...kept];
+      });
+      setLiveResultBrandTab(activeBrand);
+      setLiveKujiPage(0);
       setLiveKujiLabel(data.query || (q || "2026~2027 최신 전체"));
       if (list.length === 0) setLiveKujiError("일치하는 최신 이치방쿠지 라인업이 없습니다.");
     } catch {
