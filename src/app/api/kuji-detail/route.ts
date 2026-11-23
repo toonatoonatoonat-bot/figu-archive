@@ -222,7 +222,11 @@ export async function GET(request: NextRequest) {
     }
 
     const html = await res.text();
-    const plainText = stripHtml(html);
+    const cleanBodyHtml = html
+      .replace(/<header[\s\S]*?<\/header>/gi, " ")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, " ");
+    const plainText = stripHtml(cleanBodyHtml);
 
     const slugMatch = targetUrl.match(/\/products\/([a-zA-Z0-9_-]+)/);
     const productSlug = slugMatch?.[1]?.toLowerCase() || "";
@@ -232,7 +236,10 @@ export async function GET(request: NextRequest) {
       html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:description|description)["']/i);
     const description = descMatch?.[1]?.trim() || "";
 
-    const releaseMatch = plainText.match(/発売日[：:\s]*([^■●\n]{4,35})/);
+    const releaseMatch = plainText.match(/発売日[：:\s]*([^■●\n]{4,40})/);
+    const cleanReleaseText = (releaseMatch?.[1] || "")
+      .replace(/(?:商品カテゴリー|すべて|一番くじ|とるパカ|一番コフレ|メーカー希望小売価格|取扱店).*$/, "")
+      .trim();
     const priceMatch =
       plainText.match(/メーカー希望小売価格[：:\s]*([^■●\n]{4,30})/) ||
       plainText.match(/(1回\s*[0-9,]+円[^■●\n]{0,15})/);
@@ -240,11 +247,18 @@ export async function GET(request: NextRequest) {
 
     const prizes: string[] = [];
     const seenPrizes = new Set<string>();
-    const prizeRegex = /([A-Z]賞|ラストワン賞|ダブルチャンスキャンペーン)\s*([^\n■●<]{2,45})/g;
+    const prizeRegex = /([A-Z]賞|ラストワン賞|ダブルチャンスキャンペーン)\s*([^\n■●<]{2,55})/g;
     let pMatch: RegExpExecArray | null;
     while ((pMatch = prizeRegex.exec(plainText)) !== null) {
       const grade = pMatch[1].trim();
-      const name = pMatch[2].trim();
+      let name = pMatch[2].trim();
+      if (/(?:挑戦方法|会員登録|LINEアカウント|公式ショップ|お問い合わせ|ヘルプ)/.test(name)) continue;
+      // 경품명 내부에 동일 등급명이 반복된 경우 제거 (예: "시운 스미카 피규어 B賞 시운 스미카 피규어")
+      const dupGradeIdx = name.indexOf(grade);
+      if (dupGradeIdx > 2) {
+        name = name.slice(0, dupGradeIdx).trim();
+      }
+      name = name.replace(/\s+(?:[A-Z]賞|ラストワン賞)$/, "").trim();
       if (!seenPrizes.has(grade) && name.length >= 2) {
         seenPrizes.add(grade);
         const isFig = !NON_FIGURE_GOODS_REGEX.test(name);
@@ -365,7 +379,7 @@ export async function GET(request: NextRequest) {
     const { lotTotal, prizeCounts } = await fetchAutoAssortSpec(pageTitle, prizes);
 
     return NextResponse.json({
-      releaseText: releaseMatch?.[1]?.trim() || "",
+      releaseText: cleanReleaseText,
       priceText: priceMatch?.[1]?.trim() || "",
       storeText: storeMatch?.[1]?.trim() || "",
       onlineOpenDate: onlineMatch?.[1]?.trim() || "",
