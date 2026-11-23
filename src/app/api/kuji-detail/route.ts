@@ -107,29 +107,65 @@ async function fetchAutoAssortSpec(pageTitle: string, prizes: string[]) {
         )
       );
 
-      const combinedText = responses
-        .map((r) => (r.status === "fulfilled" ? stripHtml(r.value) : ""))
-        .join(" ");
+      const rawSnippets: string[] = [];
+      for (const r of responses) {
+        if (r.status !== "fulfilled" || !r.value) continue;
+        const snippetMatches = r.value.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi) || [];
+        if (snippetMatches.length > 0) {
+          for (const sm of snippetMatches) {
+            rawSnippets.push(stripHtml(sm));
+          }
+        } else {
+          rawSnippets.push(stripHtml(r.value));
+        }
+      }
 
-      if (combinedText.trim()) {
-        const lotMatch = combinedText.match(/(?:1ロット|ロット|全|計|総数)\s*([6-9][0-9]|100)\s*(?:本|個|枚)/);
+      // 개인 교환/양도/광고/이벤트성 노이즈 트윗 필터링
+      const filteredText = rawSnippets
+        .filter((txt) => !/(#PR|懸賞|プレゼント企画|交換|譲渡|買取|譲|求|RT希望|リポスト)/i.test(txt))
+        .join(" \n ");
+
+      if (filteredText.trim()) {
+        const lotMatch = filteredText.match(/(?:1ロット|ロット|全|計|総数)\s*([6-9][0-9]|100)\s*(?:本|個|枚)/);
         if (lotMatch) {
           lotTotal = `${lotMatch[1]}개`;
         }
 
-        const gradeCountMap = new Map<string, string>();
-        const countRegex = /([A-Z]賞|ラストワン賞)\s*[:：・＝=]?\s*([1-9][0-9]?)\s*(?:本|個|体|枚|枠)?/g;
+        const gradeCountMap = new Map<string, number>();
+
+        // 패턴 1: 표준 표기 (A賞 2本, B賞:2, ラストワン賞 1個 등)
+        const stdRegex = /([A-Z]賞|ラストワン賞)\s*[:：・＝=×xX*]?\s*([1-9][0-9]?)\s*(?:本|個|体|枚|枠)?/g;
         let m: RegExpExecArray | null;
-        while ((m = countRegex.exec(combinedText)) !== null) {
+        while ((m = stdRegex.exec(filteredText)) !== null) {
           const g = m[1].replace("賞", "상").replace("ラストワン", "라스트원");
           const c = Number(m[2]);
           if (c > 0 && c <= 30 && !gradeCountMap.has(g)) {
-            gradeCountMap.set(g, `${g} ${c}개`);
+            gradeCountMap.set(g, c);
+          }
+        }
+
+        // 패턴 2: 트위터 축약 연속 표기 (예: A2 B2 C3, A×2 B×2, ラストワン1)
+        const compactBlockRegex = /(?:[A-Z]\s*[×xX*:：]?\s*[1-9][0-9]?\s*[/／・,、\s]+){2,}(?:[A-Z]\s*[×xX*:：]?\s*[1-9][0-9]?|ラストワン\s*[×xX*:：]?\s*1)?/g;
+        let cb: RegExpExecArray | null;
+        while ((cb = compactBlockRegex.exec(filteredText)) !== null) {
+          const itemRegex = /([A-Z]|ラストワン)\s*[×xX*:：]?\s*([1-9][0-9]?)/g;
+          let im: RegExpExecArray | null;
+          while ((im = itemRegex.exec(cb[0])) !== null) {
+            const g = im[1] === "ラストワン" ? "라스트원상" : `${im[1]}상`;
+            const c = Number(im[2]);
+            if (c > 0 && c <= 30 && !gradeCountMap.has(g)) {
+              gradeCountMap.set(g, c);
+            }
           }
         }
 
         if (gradeCountMap.size >= 2) {
-          prizeCounts = Array.from(gradeCountMap.values()).join(" / ");
+          const sortedGrades = Array.from(gradeCountMap.entries()).sort((a, b) => {
+            if (a[0] === "라스트원상") return 1;
+            if (b[0] === "라스트원상") return -1;
+            return a[0].localeCompare(b[0]);
+          });
+          prizeCounts = sortedGrades.map(([g, c]) => `${g} ${c}개`).join(" / ");
           if (!lotTotal) lotTotal = "80개 (실시간 조회)";
         }
       }
