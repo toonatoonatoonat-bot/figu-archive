@@ -20,6 +20,11 @@ interface ArchiveItem {
   imageUrl?: string;
   images?: string[];
   hidden?: boolean;
+  lotTotal?: string;
+  maxPerTry?: string;
+  offlineOpenDate?: string;
+  onlineOpenDate?: string;
+  prizeCounts?: string;
 }
 
 interface SearchImageCandidate {
@@ -232,6 +237,11 @@ const EMPTY_FORM: {
   summary: string;
   content: string;
   images: string[];
+  lotTotal: string;
+  maxPerTry: string;
+  offlineOpenDate: string;
+  onlineOpenDate: string;
+  prizeCounts: string;
 } = {
   category: "신제품",
   series: "",
@@ -243,6 +253,11 @@ const EMPTY_FORM: {
   summary: "",
   content: "",
   images: [],
+  lotTotal: "",
+  maxPerTry: "",
+  offlineOpenDate: "",
+  onlineOpenDate: "",
+  prizeCounts: "",
 };
 
 async function buildAutoPublishedArticle(
@@ -768,6 +783,11 @@ export default function Home() {
       summary: item.summary,
       content: item.content || "",
       images: getItemImages(item),
+      lotTotal: item.lotTotal || "",
+      maxPerTry: item.maxPerTry || "",
+      offlineOpenDate: item.offlineOpenDate || "",
+      onlineOpenDate: item.onlineOpenDate || "",
+      prizeCounts: item.prizeCounts || "",
     });
     setManualUrlInput("");
     setImageSearchKeyword(buildSmartFigureQuery(item.title, item.maker, item.scale, itemIsKuji));
@@ -910,6 +930,11 @@ export default function Home() {
                 content: formData.content.trim(),
                 images: cleanImages,
                 imageUrl: cleanImages[0] || "",
+                lotTotal: formData.lotTotal.trim(),
+                maxPerTry: formData.maxPerTry.trim(),
+                offlineOpenDate: formData.offlineOpenDate.trim(),
+                onlineOpenDate: formData.onlineOpenDate.trim(),
+                prizeCounts: formData.prizeCounts.trim(),
               }
             : item
         )
@@ -931,6 +956,11 @@ export default function Home() {
           content: formData.content.trim(),
           images: cleanImages,
           imageUrl: cleanImages[0] || "",
+          lotTotal: formData.lotTotal.trim(),
+          maxPerTry: formData.maxPerTry.trim(),
+          offlineOpenDate: formData.offlineOpenDate.trim(),
+          onlineOpenDate: formData.onlineOpenDate.trim(),
+          prizeCounts: formData.prizeCounts.trim(),
         },
         ...prev,
       ]);
@@ -1572,7 +1602,49 @@ export default function Home() {
             )}
 
             <p className="text-xs font-semibold text-neutral-500">{viewingItem.series}</p>
-            <h3 className="mt-1 text-xl font-bold text-neutral-900">{viewingItem.title}</h3>
+                        <h3 className="mt-1 text-xl font-bold text-neutral-900">{viewingItem.title}</h3>
+            {(viewingItem.price || viewingItem.lotTotal || viewingItem.maxPerTry || viewingItem.offlineOpenDate || viewingItem.onlineOpenDate || viewingItem.prizeCounts) && (
+              <div className="mt-3 rounded-xl border border-neutral-200 bg-neutral-50/80 p-3.5 text-xs">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+                  {viewingItem.price && (
+                    <div>
+                      <span className="block text-[11px] text-neutral-400">1회 가격 / 등급</span>
+                      <span className="font-semibold text-neutral-900">{viewingItem.price}</span>
+                    </div>
+                  )}
+                  {viewingItem.lotTotal && (
+                    <div>
+                      <span className="block text-[11px] text-neutral-400">1롯트 총 수량</span>
+                      <span className="font-semibold text-neutral-900">{viewingItem.lotTotal}</span>
+                    </div>
+                  )}
+                  {viewingItem.maxPerTry && (
+                    <div>
+                      <span className="block text-[11px] text-neutral-400">1회 최대 횟수</span>
+                      <span className="font-semibold text-neutral-900">{viewingItem.maxPerTry}</span>
+                    </div>
+                  )}
+                  {viewingItem.offlineOpenDate && (
+                    <div>
+                      <span className="block text-[11px] text-neutral-400">오프라인 오픈일</span>
+                      <span className="font-semibold text-neutral-900">{viewingItem.offlineOpenDate}</span>
+                    </div>
+                  )}
+                  {viewingItem.onlineOpenDate && (
+                    <div>
+                      <span className="block text-[11px] text-neutral-400">온라인 쿠지 오픈일</span>
+                      <span className="font-semibold text-neutral-900">{viewingItem.onlineOpenDate}</span>
+                    </div>
+                  )}
+                </div>
+                {viewingItem.prizeCounts && (
+                  <div className="mt-2.5 border-t border-neutral-200/80 pt-2.5">
+                    <span className="mb-1 block text-[11px] text-neutral-400">상별 수량 (혼입률)</span>
+                    <p className="whitespace-pre-line font-medium text-neutral-800">{viewingItem.prizeCounts}</p>
+                  </div>
+                )}
+              </div>
+            )}
             <p className="mt-3 rounded-lg bg-neutral-50 p-3.5 text-xs text-neutral-700">
               {viewingItem.summary}
             </p>
@@ -1580,7 +1652,16 @@ export default function Home() {
               {viewingItem.content}
             </div>
 
-            <div className="mt-8 flex justify-end gap-2 border-t border-neutral-100 pt-4 text-xs">
+                        <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-4 text-xs">
+              <a
+                href={`https://jp.mercari.com/search?keyword=${encodeURIComponent(viewingItem.title)}&status=sold_out`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3.5 py-2 font-semibold text-red-700 hover:bg-red-100"
+              >
+                메루카리 솔드아웃 시세 ↗
+              </a>
+              <div className="flex items-center gap-2">
               {isAdmin && (<button
                 type="button"
                 onClick={() => openEditModal(viewingItem)}
@@ -1595,6 +1676,7 @@ export default function Home() {
               >
                 목록으로
               </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1692,6 +1774,62 @@ export default function Home() {
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: e.target.value })}
                     className="w-full rounded-lg border border-neutral-300 px-3 py-2"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/70 p-3.5 space-y-3">
+                <p className="font-bold text-neutral-800">쿠지 상세 스펙 (선택 입력)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-1 block font-semibold text-neutral-600">1롯트 총 수량</label>
+                    <input
+                      type="text"
+                      placeholder="예: 80개"
+                      value={formData.lotTotal}
+                      onChange={(e) => setFormData({ ...formData, lotTotal: e.target.value })}
+                      className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-semibold text-neutral-600">1회 최대 구매 횟수</label>
+                    <input
+                      type="text"
+                      placeholder="예: 5회 / 무제한"
+                      value={formData.maxPerTry}
+                      onChange={(e) => setFormData({ ...formData, maxPerTry: e.target.value })}
+                      className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-semibold text-neutral-600">오프라인 오픈일</label>
+                    <input
+                      type="text"
+                      placeholder="예: 2026.11.28"
+                      value={formData.offlineOpenDate}
+                      onChange={(e) => setFormData({ ...formData, offlineOpenDate: e.target.value })}
+                      className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-semibold text-neutral-600">온라인 쿠지 오픈일</label>
+                    <input
+                      type="text"
+                      placeholder="예: 2026.12.02 17:00"
+                      value={formData.onlineOpenDate}
+                      onChange={(e) => setFormData({ ...formData, onlineOpenDate: e.target.value })}
+                      className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-neutral-600">상별 수량 (혼입률)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="예: A상 2개 / B상 2개 / C상 3개 / D상 4개 / 라스트원 1개"
+                    value={formData.prizeCounts}
+                    onChange={(e) => setFormData({ ...formData, prizeCounts: e.target.value })}
+                    className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2"
                   />
                 </div>
               </div>
