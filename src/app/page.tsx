@@ -104,6 +104,26 @@ function detectIsIchibanKuji(title: string, maker: string, price: string): boole
   );
 }
 
+type ManageQualityFilter = "all" | "duplicate" | "incomplete" | "no-image";
+
+function getKujiSlugKey(item: ArchiveItem): string {
+  const m = `${item.content}\n${item.summary}`.match(/1kuji\.com\/products\/([a-zA-Z0-9_-]+)/i);
+  if (m) return `slug:${m[1].toLowerCase()}`;
+  const norm = item.title
+    .toLowerCase()
+    .replace(/이치방쿠지|제일복권|一番くじ|\s+|[^\w가-힣ぁ-んァ-ヶ一-龥]/g, "");
+  return norm ? `title:${norm}` : `id:${item.id}`;
+}
+
+function isSpecIncomplete(item: ArchiveItem): boolean {
+  if (item.category === "수집 가이드") return false;
+  const lot = (item.lotTotal || "").trim();
+  const prize = (item.prizeCounts || "").trim();
+  if (!lot || !prize) return true;
+  if (lot.includes("추정") || lot.includes("표준 기준") || prize.includes("추정")) return true;
+  return false;
+}
+
 function getAssortTrustBadge(item: ArchiveItem): { label: string; className: string } | null {
   const combined = `${item.lotTotal || ""} ${item.prizeCounts || ""}`.trim();
   if (!combined) return null;
@@ -475,6 +495,7 @@ export default function Home() {
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [selectedManageIds, setSelectedManageIds] = useState<string[]>([]);
   const [manageSearchQuery, setManageSearchQuery] = useState("");
+  const [manageQualityFilter, setManageQualityFilter] = useState<ManageQualityFilter>("all");
   const [isRefreshingPosts, setIsRefreshingPosts] = useState(false);
   const [refreshProgressText, setRefreshProgressText] = useState<string | null>(null);
 
@@ -2224,7 +2245,48 @@ export default function Home() {
           </form>
         </div>
       )}
-      {isAdmin && isManageModalOpen && (
+      {isAdmin && isManageModalOpen && (() => {
+        const keyCounts = new Map<string, number>();
+        items.forEach((it) => {
+          const k = getKujiSlugKey(it);
+          keyCounts.set(k, (keyCounts.get(k) || 0) + 1);
+        });
+
+        const duplicateAllIds = new Set<string>();
+        const duplicateExtraIds: string[] = [];
+        const seenKeys = new Set<string>();
+        items.forEach((it) => {
+          const k = getKujiSlugKey(it);
+          if ((keyCounts.get(k) || 0) > 1) {
+            duplicateAllIds.add(it.id);
+            if (seenKeys.has(k)) {
+              duplicateExtraIds.push(it.id);
+            } else {
+              seenKeys.add(k);
+            }
+          }
+        });
+
+        const incompleteIds = items.filter((it) => isSpecIncomplete(it)).map((it) => it.id);
+        const noImageIds = items.filter((it) => getItemImages(it).length === 0).map((it) => it.id);
+
+        const matchesManageFilter = (it: ArchiveItem) => {
+          if (manageQualityFilter === "duplicate" && !duplicateAllIds.has(it.id)) return false;
+          if (manageQualityFilter === "incomplete" && !isSpecIncomplete(it)) return false;
+          if (manageQualityFilter === "no-image" && getItemImages(it).length > 0) return false;
+          const q = manageSearchQuery.trim().toLowerCase();
+          if (!q) return true;
+          return (
+            it.title.toLowerCase().includes(q) ||
+            it.code.toLowerCase().includes(q) ||
+            it.series.toLowerCase().includes(q) ||
+            it.maker.toLowerCase().includes(q)
+          );
+        };
+
+        const filteredManageItems = items.filter(matchesManageFilter);
+
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
           <div
             className="flex max-h-[85vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl"
@@ -2232,9 +2294,9 @@ export default function Home() {
           >
             <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
               <div>
-                <h3 className="text-base font-bold text-neutral-900">📋 게시물 모음 관리</h3>
+                <h3 className="text-base font-bold text-neutral-900">📋 게시물 모음 관리 & DB 무결성 점검</h3>
                 <p className="mt-0.5 text-xs text-neutral-500">
-                  전체 {items.length}건 (공개 {items.filter((i) => !i.hidden).length}건 · 숨김 {items.filter((i) => i.hidden).length}건) — 순서 이동, 숨김 전환, 일괄 삭제가 가능합니다.
+                  전체 {items.length}건 (공개 {items.filter((i) => !i.hidden).length}건 · 숨김 {items.filter((i) => i.hidden).length}건) — 중복 정리, 누락 스펙 일괄 갱신, 순서 이동이 가능합니다.
                 </p>
               </div>
               <button
@@ -2244,6 +2306,81 @@ export default function Home() {
               >
                 ✕ 닫기
               </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 bg-white px-6 py-2.5">
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setManageQualityFilter("all")}
+                  className={`rounded-full border px-2.5 py-1 font-semibold ${
+                    manageQualityFilter === "all"
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-200 bg-neutral-50 text-neutral-600 hover:bg-neutral-100"
+                  }`}
+                >
+                  전체 ({items.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManageQualityFilter("duplicate")}
+                  className={`rounded-full border px-2.5 py-1 font-semibold ${
+                    manageQualityFilter === "duplicate"
+                      ? "border-rose-700 bg-rose-600 text-white"
+                      : "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                  }`}
+                >
+                  중복 의심 ({duplicateAllIds.size})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManageQualityFilter("incomplete")}
+                  className={`rounded-full border px-2.5 py-1 font-semibold ${
+                    manageQualityFilter === "incomplete"
+                      ? "border-amber-700 bg-amber-600 text-white"
+                      : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                  }`}
+                >
+                  스펙/어소트 미완성 ({incompleteIds.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setManageQualityFilter("no-image")}
+                  className={`rounded-full border px-2.5 py-1 font-semibold ${
+                    manageQualityFilter === "no-image"
+                      ? "border-purple-700 bg-purple-600 text-white"
+                      : "border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100"
+                  }`}
+                >
+                  이미지 없음 ({noImageIds.length})
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {duplicateExtraIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManageQualityFilter("duplicate");
+                      setSelectedManageIds(duplicateExtraIds);
+                    }}
+                    className="rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100"
+                  >
+                    🧹 중복 사본만 자동 선택 ({duplicateExtraIds.length}건)
+                  </button>
+                )}
+                {incompleteIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManageQualityFilter("incomplete");
+                      setSelectedManageIds(incompleteIds);
+                    }}
+                    className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-800 hover:bg-amber-100"
+                  >
+                    ⚡ 미완성 스펙 일괄 선택 ({incompleteIds.length}건)
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-100 bg-neutral-50 px-6 py-3">
@@ -2258,25 +2395,15 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={() => {
-                    const filtered = items.filter((it) => {
-                      const q = manageSearchQuery.trim().toLowerCase();
-                      if (!q) return true;
-                      return (
-                        it.title.toLowerCase().includes(q) ||
-                        it.code.toLowerCase().includes(q) ||
-                        it.series.toLowerCase().includes(q) ||
-                        it.maker.toLowerCase().includes(q)
-                      );
-                    });
-                    if (selectedManageIds.length === filtered.length && filtered.length > 0) {
+                    if (selectedManageIds.length === filteredManageItems.length && filteredManageItems.length > 0) {
                       setSelectedManageIds([]);
                     } else {
-                      setSelectedManageIds(filtered.map((it) => it.id));
+                      setSelectedManageIds(filteredManageItems.map((it) => it.id));
                     }
                   }}
                   className="rounded-lg border border-neutral-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-100"
                 >
-                  전체 선택/해제
+                  현재 목록 전체 선택/해제
                 </button>
                 <button
                   type="button"
@@ -2357,18 +2484,7 @@ export default function Home() {
             )}
 
             <div className="flex-1 divide-y divide-neutral-100 overflow-y-auto px-6 py-2">
-              {items
-                .filter((it) => {
-                  const q = manageSearchQuery.trim().toLowerCase();
-                  if (!q) return true;
-                  return (
-                    it.title.toLowerCase().includes(q) ||
-                    it.code.toLowerCase().includes(q) ||
-                    it.series.toLowerCase().includes(q) ||
-                    it.maker.toLowerCase().includes(q)
-                  );
-                })
-                .map((it) => {
+              {filteredManageItems.map((it) => {
                   const checked = selectedManageIds.includes(it.id);
                   const realIdx = items.findIndex((x) => x.id === it.id);
                   const isFirst = realIdx === 0;
@@ -2412,6 +2528,21 @@ export default function Home() {
                             {it.hidden && (
                               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
                                 숨김됨
+                              </span>
+                            )}
+                            {duplicateAllIds.has(it.id) && (
+                              <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700">
+                                중복 의심
+                              </span>
+                            )}
+                            {isSpecIncomplete(it) && (
+                              <span className="rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                                스펙/어소트 미완성
+                              </span>
+                            )}
+                            {getItemImages(it).length === 0 && (
+                              <span className="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">
+                                이미지 없음
                               </span>
                             )}
                             <span className="font-mono font-semibold text-neutral-700">{it.code}</span>
@@ -2511,7 +2642,8 @@ export default function Home() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
