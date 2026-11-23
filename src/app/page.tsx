@@ -572,14 +572,36 @@ async function buildAutoPublishedArticle(
     koPrizes.forEach((p) => contentLines.push(`• ${p}`));
   }
 
+  const detectedBrand: KujiBrandType =
+    kuji.kujiBrand ||
+    resolveItemKujiBrand({
+      title: `${kuji.title} ${koTitle}`,
+      maker: kuji.maker,
+      content: kuji.sourceUrl,
+    });
+  const detectedMaker =
+    kuji.maker ||
+    (detectedBrand === "세가 럭키 쿠지"
+      ? "SEGA (세가)"
+      : detectedBrand === "모두의 쿠지"
+        ? "FuRyu (후류)"
+        : detectedBrand === "아타리 쿠지"
+          ? "Sanrio (산리오)"
+          : detectedBrand === "타이토 쿠지"
+            ? "TAITO (타이토)"
+            : detectedBrand === "해피쿠지"
+              ? "Sunny Side Up (써니사이드업)"
+              : detectedBrand === "애니쿠지"
+                ? "Animate (애니메이트)"
+                : "반다이 스피리츠 (BANDAI SPIRITS)");
   return {
     id: `auto-post-${kuji.slug}-${Date.now()}-${codeNumber}`,
     code: `FIG-${parsedYear}-${seqStr}`,
     category: "신제품",
-    kujiBrand: "이치방쿠지",
+    kujiBrand: detectedBrand,
     series: kuji.series,
     title: bilingualTitle,
-    maker: "반다이 스피리츠 (이치방쿠지)",
+    maker: detectedMaker,
     scale: koPrizes.length > 0 ? `경품 ${koPrizes.length}종 라인업` : "경품 라인업 (논스케일)",
     releaseDate: kuji.releaseDate,
     price: autoPriceText || (kuji.price && kuji.price !== "이치방쿠지" ? kuji.price : "가격 미정"),
