@@ -321,6 +321,38 @@ async function searchBrandViaWebIndex(
   }
 }
 
+async function hydrateMissingThumbnails(items: KujiLiveProduct[]): Promise<KujiLiveProduct[]> {
+  const targets = items.filter((it) => !it.imageUrl && it.sourceUrl).slice(0, 18);
+  if (targets.length === 0) return items;
+
+  const urlToImg = new Map<string, string>();
+  await Promise.allSettled(
+    targets.map(async (item) => {
+      try {
+        const res = await fetch(item.sourceUrl, {
+          headers: { "User-Agent": USER_AGENT },
+          signal: AbortSignal.timeout(3500),
+        });
+        if (!res.ok) return;
+        const html = await res.text();
+        const ogMatch =
+          html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+          html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+        if (ogMatch?.[1]) {
+          const abs = new URL(ogMatch[1].replace(/&amp;/g, "&"), item.sourceUrl).toString();
+          if (abs.startsWith("http")) urlToImg.set(item.sourceUrl, abs);
+        }
+      } catch {}
+    })
+  );
+
+  return items.map((it) =>
+    !it.imageUrl && urlToImg.has(it.sourceUrl)
+      ? { ...it, imageUrl: urlToImg.get(it.sourceUrl)! }
+      : it
+  );
+}
+
 export async function GET(request: NextRequest) {
   const rawQuery = request.nextUrl.searchParams.get("q")?.trim() || "";
   const brandFilter = request.nextUrl.searchParams.get("brand")?.trim() || "전체";
@@ -570,9 +602,10 @@ export async function GET(request: NextRequest) {
       return getDateSortScore(b.releaseDate) - getDateSortScore(a.releaseDate);
     });
 
+    const finalSliced = await hydrateMissingThumbnails(filteredMerged.slice(0, 80));
     return NextResponse.json({
       query: jpQuery || `${brandFilter} 통합 라인업`,
-      items: filteredMerged.slice(0, 80),
+      items: finalSliced,
       count: filteredMerged.length,
     });
   } catch (error) {

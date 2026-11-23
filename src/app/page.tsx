@@ -722,6 +722,7 @@ export default function Home() {
 
   const [isLiveSearchingKuji, setIsLiveSearchingKuji] = useState(false);
   const [liveKujiResults, setLiveKujiResults] = useState<KujiLiveItem[]>([]);
+  const [liveResultBrandTab, setLiveResultBrandTab] = useState<"전체" | KujiBrandType>("전체");
   const [liveSearchBrand, setLiveSearchBrand] = useState<"전체" | KujiBrandType>("전체");
   const [liveKujiPage, setLiveKujiPage] = useState(0);
   const [liveKujiLabel, setLiveKujiLabel] = useState<string | null>(null);
@@ -1462,7 +1463,7 @@ export default function Home() {
                   1KUJI.COM LIVE
                 </span>
                 <h3 className="text-sm font-bold text-amber-950">
-                  이치방쿠지 공식 최신 정보 ({liveKujiLabel} · {liveKujiResults.length}건)
+                  쿠지 공식 최신 정보 ({liveKujiLabel} · {liveKujiResults.length}건)
                 </h3>
               </div>
               <div className="flex items-center gap-2">
