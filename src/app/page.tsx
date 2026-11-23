@@ -916,7 +916,23 @@ export default function Home() {
         return;
       }
 
-      const batch = uncollected.slice(0, 12);
+      const batch = (() => {
+        if (sourceCandidates && sourceCandidates.length > 0) {
+          return uncollected.slice(0, 30);
+        }
+        const perBrand = new Map<string, number>();
+        const balanced: KujiLiveItem[] = [];
+        for (const item of uncollected) {
+          const b = item.kujiBrand || resolveItemKujiBrand({ title: item.title, content: item.sourceUrl });
+          const cnt = perBrand.get(b) || 0;
+          if (cnt < 5) {
+            perBrand.set(b, cnt + 1);
+            balanced.push(item);
+          }
+          if (balanced.length >= 35) break;
+        }
+        return balanced;
+      })();
       const createdArticles: ArchiveItem[] = [];
       for (let i = 0; i < batch.length; i++) {
         setPublishProgressText(
@@ -932,7 +948,7 @@ export default function Home() {
       setItems((prev) => [...createdArticles, ...prev]);
       setSelectedCategory("신제품");
       setPublishProgressText(
-        `🎉 최신 이치방쿠지 ${createdArticles.length}건이 피규어 전용 화보 포함 게시물로 자동 발행되었습니다!`
+        `🎉 전 브랜드 최신 쿠지 ${createdArticles.length}건이 자동 발행되었습니다!`
       );
     } catch {
       setPublishProgressText("⚠️ 자동 게시물 생성 중 오류가 발생했습니다.");
@@ -1372,7 +1388,7 @@ export default function Home() {
                 >
                   {isAutoPublishing
                     ? "✍️ 피규어 전용 게시물화 중..."
-                    : "📰 최신 이치방쿠지 자동 게시물 발행"}
+                    : "📰 전 브랜드 최신 쿠지 자동 게시물 발행"}
                 </button>
               </div>
             )}
