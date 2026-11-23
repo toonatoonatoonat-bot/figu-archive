@@ -1690,7 +1690,8 @@ export default function Home() {
               );
             })()}
           </section>
-        )}
+          );
+        })()}
 
         <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-neutral-200/70 pb-3">
           <span className="mr-1 font-mono text-[11px] font-semibold text-neutral-400">BRAND:</span>
