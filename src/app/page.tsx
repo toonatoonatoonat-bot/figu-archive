@@ -16,10 +16,63 @@ function formatKstTimestamp(): string {
   return `${yyyy}.${mm}.${dd} ${hh}:${min}`;
 }
 
+type KujiBrandType =
+  | "이치방쿠지"
+  | "세가 럭키 쿠지"
+  | "모두의 쿠지"
+  | "아타리 쿠지"
+  | "타이토 쿠지"
+  | "해피쿠지"
+  | "애니쿠지";
+
+const KUJI_BRAND_LIST: KujiBrandType[] = [
+  "이치방쿠지",
+  "세가 럭키 쿠지",
+  "모두의 쿠지",
+  "아타리 쿠지",
+  "타이토 쿠지",
+  "해피쿠지",
+  "애니쿠지",
+];
+
+function resolveItemKujiBrand(item: Partial<ArchiveItem>): KujiBrandType {
+  if (item.kujiBrand && KUJI_BRAND_LIST.includes(item.kujiBrand as KujiBrandType)) {
+    return item.kujiBrand as KujiBrandType;
+  }
+  const blob = `${item.title || ""} ${item.maker || ""} ${item.summary || ""} ${item.content || ""}`;
+  if (/세가\s*럭키\s*쿠지|segaplaza|ラッキーくじ/i.test(blob)) return "세가 럭키 쿠지";
+  if (/모두의\s*쿠지|charahiroba|みんなのくじ/i.test(blob)) return "모두의 쿠지";
+  if (/아타리\s*쿠지|sanrio\.co\.jp|当たりくじ/i.test(blob)) return "아타리 쿠지";
+  if (/타이토\s*쿠지|taito\.co\.jp\/taitokuji|タイトーくじ/i.test(blob)) return "타이토 쿠지";
+  if (/해피쿠지|h-kuji\.com|Happyくじ/i.test(blob)) return "해피쿠지";
+  if (/애니쿠지|animate-onlineshop|アニくじ/i.test(blob)) return "애니쿠지";
+  return "이치방쿠지";
+}
+
+function getKujiBrandBadgeStyle(brand: KujiBrandType): string {
+  switch (brand) {
+    case "세가 럭키 쿠지":
+      return "border-sky-300 bg-sky-50 text-sky-800";
+    case "모두의 쿠지":
+      return "border-violet-300 bg-violet-50 text-violet-800";
+    case "아타리 쿠지":
+      return "border-pink-300 bg-pink-50 text-pink-800";
+    case "타이토 쿠지":
+      return "border-orange-300 bg-orange-50 text-orange-800";
+    case "해피쿠지":
+      return "border-amber-300 bg-amber-50 text-amber-800";
+    case "애니쿠지":
+      return "border-teal-300 bg-teal-50 text-teal-800";
+    default:
+      return "border-red-200 bg-red-50 text-red-700";
+  }
+}
+
 interface ArchiveItem {
   id: string;
   code: string;
   category: CategoryType;
+  kujiBrand?: KujiBrandType;
   series: string;
   title: string;
   maker: string;
@@ -46,6 +99,8 @@ interface SearchImageCandidate {
 }
 
 interface KujiLiveItem {
+  kujiBrand?: KujiBrandType;
+  maker?: string;
   slug: string;
   title: string;
   series: string;
@@ -328,6 +383,7 @@ const INITIAL_DATA: ArchiveItem[] = [
     id: "1",
     code: "FIG-2026-001",
     category: "신제품",
+    kujiBrand: detectedBrand,
     series: "신세기 에반게리온",
     title: "에반게리온 초호기 (신극장판 Ver.)",
     maker: "굿스마일 컴퍼니",
@@ -343,6 +399,7 @@ const INITIAL_DATA: ArchiveItem[] = [
     id: "5",
     code: "FIG-2027-003",
     category: "신제품",
+    kujiBrand: detectedBrand,
     series: "신세기 에반게리온",
     title: "이카리 신지 & 카오루 피아노 듀엣 디오라마",
     maker: "코토부키야",
@@ -358,6 +415,7 @@ const INITIAL_DATA: ArchiveItem[] = [
 
 const EMPTY_FORM: {
   category: CategoryType;
+  kujiBrand?: KujiBrandType;
   series: string;
   title: string;
   maker: string;
@@ -518,6 +576,7 @@ async function buildAutoPublishedArticle(
     id: `auto-post-${kuji.slug}-${Date.now()}-${codeNumber}`,
     code: `FIG-${parsedYear}-${seqStr}`,
     category: "신제품",
+    kujiBrand: detectedBrand,
     series: kuji.series,
     title: bilingualTitle,
     maker: "반다이 스피리츠 (이치방쿠지)",
@@ -541,6 +600,7 @@ export default function Home() {
   const DEFAULT_ARCHIVE: ArchiveItem[] = Array.isArray(seedData) && seedData.length > 0 ? (seedData as ArchiveItem[]) : INITIAL_DATA;
   const [items, setItems] = useState<ArchiveItem[]>(DEFAULT_ARCHIVE);
   const [isLoaded, setIsLoaded] = useState(false); const [isAdmin, setIsAdmin] = useState(false); const [adminSessionPassword, setAdminSessionPassword] = useState("");
+  const [selectedBrand, setSelectedBrand] = useState<"전체" | KujiBrandType>("전체");
   const [selectedSeries, setSelectedSeries] = useState("전체");
   const [selectedCategory, setSelectedCategory] = useState("전체");
   const [selectedYear, setSelectedYear] = useState("전체 연도");
@@ -861,6 +921,8 @@ export default function Home() {
   const filteredItems = items
     .filter((item) => {
       if (item.hidden) return false;
+      const itemBrand = resolveItemKujiBrand(item);
+      const matchBrand = selectedBrand === "전체" || itemBrand === selectedBrand;
       const matchSeries = selectedSeries === "전체" || item.series === selectedSeries;
       const matchCategory = selectedCategory === "전체" || item.category === selectedCategory;
       const matchYear =
@@ -877,7 +939,7 @@ export default function Home() {
         item.code.toLowerCase().includes(kw) ||
         item.releaseDate.toLowerCase().includes(kw) ||
         item.summary.toLowerCase().includes(kw);
-      return matchSeries && matchCategory && matchYear && matchReleaseStatus && matchSearch;
+      return matchBrand && matchSeries && matchCategory && matchYear && matchReleaseStatus && matchSearch;
     })
     .sort((a, b) => {
       if (sortBy === "code") return a.code.localeCompare(b.code);
@@ -1188,6 +1250,7 @@ export default function Home() {
   const handleReset = () => {
     if (window.confirm("기본 도감 샘플 데이터로 초기화할까요?")) {
       setItems(DEFAULT_ARCHIVE);
+      setSelectedBrand("전체");
       setSelectedSeries("전체");
       setSelectedCategory("전체");
       setSelectedYear("전체 연도");
@@ -1564,6 +1627,56 @@ export default function Home() {
           </section>
         )}
 
+        <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-neutral-200/70 pb-3">
+          <span className="mr-1 font-mono text-[11px] font-semibold text-neutral-400">BRAND:</span>
+          {(["전체", ...KUJI_BRAND_LIST] as const).map((brandName) => {
+            const visibleItems = items.filter((it) => !it.hidden);
+            const count =
+              brandName === "전체"
+                ? visibleItems.length
+                : visibleItems.filter((it) => resolveItemKujiBrand(it) === brandName).length;
+            return (
+              <button
+                key={brandName}
+                type="button"
+                onClick={() => setSelectedBrand(brandName)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                  selectedBrand === brandName
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400"
+                }`}
+              >
+                {brandName} ({count})
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-neutral-200/70 pb-3">
+          <span className="mr-1 font-mono text-[11px] font-semibold text-neutral-400">BRAND:</span>
+          {(["전체", ...KUJI_BRAND_LIST] as const).map((brandName) => {
+            const visibleItems = items.filter((it) => !it.hidden);
+            const count =
+              brandName === "전체"
+                ? visibleItems.length
+                : visibleItems.filter((it) => resolveItemKujiBrand(it) === brandName).length;
+            return (
+              <button
+                key={brandName}
+                type="button"
+                onClick={() => setSelectedBrand(brandName)}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                  selectedBrand === brandName
+                    ? "border-neutral-900 bg-neutral-900 text-white"
+                    : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400"
+                }`}
+              >
+                {brandName} ({count})
+              </button>
+            );
+          })}
+        </div>
+
         <div className="mb-3 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             {seriesList.map((series) => (
@@ -1667,6 +1780,14 @@ export default function Home() {
                   <div className="mb-3 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <span className="font-mono text-[11px] text-neutral-400">{item.code}</span>
+                      {(() => {
+                        const b = resolveItemKujiBrand(item);
+                        return (
+                          <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${getKujiBrandBadgeStyle(b)}`}>
+                            {b}
+                          </span>
+                        );
+                      })()}
                       {isNextYearPlus && (
                         <span className="rounded bg-indigo-50 px-1.5 py-0.5 font-mono text-[10px] font-bold text-indigo-600">
                           {itemYear} 예정

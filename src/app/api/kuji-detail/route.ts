@@ -134,7 +134,7 @@ async function fetchAutoAssortSpec(pageTitle: string, prizes: string[]) {
         const gradeCountMap = new Map<string, number>();
 
         // 패턴 1: 표준 표기 (A賞 2本, B賞:2, ラストワン賞 1個 등)
-        const stdRegex = /([A-Z]賞|ラストワン賞)\s*[:：・＝=×xX*]?\s*([1-9][0-9]?)\s*(?:本|個|体|枚|枠)?/g;
+        const stdRegex = /([A-Z]賞|ラストワン賞|ラストラッキー賞|ラストハッピー賞|ラストスペシャル賞)\s*[:：・＝=×xX*]?\s*([1-9][0-9]?)\s*(?:本|個|体|枚|枠)?/g;
         let m: RegExpExecArray | null;
         while ((m = stdRegex.exec(filteredText)) !== null) {
           const g = m[1].replace("賞", "상").replace("ラストワン", "라스트원");
@@ -197,9 +197,10 @@ async function fetchAutoAssortSpec(pageTitle: string, prizes: string[]) {
 export async function GET(request: NextRequest) {
   const targetUrl = request.nextUrl.searchParams.get("url")?.trim() || "";
 
-  if (!targetUrl || !targetUrl.includes("1kuji.com")) {
+  const ALLOWED_HOSTS = ["1kuji.com", "segaplaza.jp", "charahiroba.com", "taito.co.jp", "h-kuji.com", "sanrio.co.jp", "animate-onlineshop.jp"];
+  if (!targetUrl || !ALLOWED_HOSTS.some((h) => targetUrl.includes(h))) {
     return NextResponse.json(
-      { error: "유효한 1kuji.com 상세 페이지 주소가 필요합니다." },
+      { error: "지원되는 쿠지 공식 상세 페이지 주소가 필요합니다." },
       { status: 400 }
     );
   }
@@ -247,7 +248,7 @@ export async function GET(request: NextRequest) {
 
     const prizes: string[] = [];
     const seenPrizes = new Set<string>();
-    const prizeRegex = /([A-Z]賞|ラストワン賞|ダブルチャンスキャンペーン)\s*([^\n■●<]{2,55})/g;
+    const prizeRegex = /([A-Z]賞|ラストワン賞|ラストラッキー賞|ラストハッピー賞|ラストスペシャル賞|ラストゲット賞|ダブルチャンスキャンペーン)\s*([^\n■●<]{2,55})/g;
     let pMatch: RegExpExecArray | null;
     while ((pMatch = prizeRegex.exec(plainText)) !== null) {
       const grade = pMatch[1].trim();
