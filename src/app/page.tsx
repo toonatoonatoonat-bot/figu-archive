@@ -104,12 +104,7 @@ function detectIsIchibanKuji(title: string, maker: string, price: string): boole
   );
 }
 
-type ManageQualityFilter = "all" | "japanese" | "duplicate" | "incomplete" | "no-image";
-
-function hasJapaneseText(item: ArchiveItem): boolean {
-  const combined = `${item.title} ${item.series} ${item.summary} ${item.content} ${item.prizeCounts || ""}`;
-  return /[\u3040-\u30ff\u4e00-\u9faf]/.test(combined);
-}
+type ManageQualityFilter = "all" | "duplicate" | "incomplete" | "no-image";
 
 function getKujiSlugKey(item: ArchiveItem): string {
   const m = `${item.content}\n${item.summary}`.match(/1kuji\.com\/products\/([a-zA-Z0-9_-]+)/i);
@@ -558,7 +553,6 @@ export default function Home() {
   const [selectedManageIds, setSelectedManageIds] = useState<string[]>([]);
   const [manageSearchQuery, setManageSearchQuery] = useState("");
   const [manageQualityFilter, setManageQualityFilter] = useState<ManageQualityFilter>("all");
-  const [isTranslatingPosts, setIsTranslatingPosts] = useState(false);
   const [isRefreshingPosts, setIsRefreshingPosts] = useState(false);
   const [refreshProgressText, setRefreshProgressText] = useState<string | null>(null);
 
@@ -849,85 +843,6 @@ export default function Home() {
       setPublishProgressText("⚠️ 자동 게시물 생성 중 오류가 발생했습니다.");
     } finally {
       setIsAutoPublishing(false);
-    }
-  };
-
-  const handleTranslateArchiveItems = async (targetIds: string[]) => {
-    if (targetIds.length === 0 || isTranslatingPosts) return;
-    setIsTranslatingPosts(true);
-    try {
-      const targets = items.filter((it) => targetIds.includes(it.id));
-      const updatedMap = new Map<string, ArchiveItem>();
-
-      for (let i = 0; i < targets.length; i++) {
-        const it = targets[i];
-        setRefreshProgressText(
-          `🇰🇷 한국어 번역 및 문장 다듬기 중 (${i + 1}/${targets.length}) : ${it.title}`
-        );
-
-        const fields = [
-          it.title,
-          it.series,
-          it.maker,
-          it.scale,
-          it.releaseDate,
-          it.price,
-          it.summary,
-          it.content,
-          it.prizeCounts || "",
-          it.lotTotal || "",
-          it.maxPerTry || "",
-          it.offlineOpenDate || "",
-          it.onlineOpenDate || "",
-        ];
-
-        const res = await fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ texts: fields }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          const t: string[] = Array.isArray(data?.translations) ? data.translations : [];
-          if (t.length >= 9) {
-            const nextItem: ArchiveItem = {
-              ...it,
-              title: t[0] || it.title,
-              series: t[1] || it.series,
-              maker: t[2] || it.maker,
-              scale: t[3] || it.scale,
-              releaseDate: t[4] || it.releaseDate,
-              price: t[5] || it.price,
-              summary: t[6] || it.summary,
-              content: t[7] || it.content,
-              prizeCounts: t[8] || it.prizeCounts,
-              lotTotal: t[9] || it.lotTotal,
-              maxPerTry: t[10] || it.maxPerTry,
-              offlineOpenDate: t[11] || it.offlineOpenDate,
-              onlineOpenDate: t[12] || it.onlineOpenDate,
-              updatedAt: formatKstTimestamp(),
-            };
-            updatedMap.set(it.id, nextItem);
-          }
-        }
-      }
-
-      if (updatedMap.size > 0) {
-        setItems((prev) => prev.map((it) => updatedMap.get(it.id) || it));
-        if (viewingItem && updatedMap.has(viewingItem.id)) {
-          setViewingItem(updatedMap.get(viewingItem.id) || null);
-        }
-        setRefreshProgressText(
-          `✅ 총 ${updatedMap.size}건의 게시물이 자연스러운 한국어로 번역·윤문되었습니다!`
-        );
-      } else {
-        setRefreshProgressText("⚠️ 번역할 항목을 처리하지 못했습니다.");
-      }
-    } catch {
-      setRefreshProgressText("⚠️ 한국어 번역 처리 중 오류가 발생했습니다.");
-    } finally {
-      setIsTranslatingPosts(false);
     }
   };
 
@@ -2126,25 +2041,13 @@ export default function Home() {
               >
                 {isSingleRefreshing ? "동기화 중..." : "🔄 최신 정보 동기화"}
               </button>
-              {isAdmin && (
-                <>
-                  <button
-                    type="button"
-                    disabled={isTranslatingPosts}
-                    onClick={() => handleTranslateArchiveItems([viewingItem.id])}
-                    className="rounded-lg border border-emerald-300 bg-emerald-50 px-3.5 py-2 font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50"
-                  >
-                    {isTranslatingPosts ? "번역 중..." : "🇰🇷 한국어 번역·다듬기"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(viewingItem)}
-                    className="rounded-lg border border-neutral-300 px-4 py-2 font-medium"
-                  >
-                    이 기록 수정
-                  </button>
-                </>
-              )}
+              {isAdmin && (<button
+                type="button"
+                onClick={() => openEditModal(viewingItem)}
+                className="rounded-lg border border-neutral-300 px-4 py-2 font-medium"
+              >
+                이 기록 수정
+              </button>)}
               <button
                 type="button"
                 onClick={() => setViewingItem(null)}
@@ -2545,12 +2448,10 @@ export default function Home() {
           }
         });
 
-        const japaneseIds = items.filter((it) => hasJapaneseText(it)).map((it) => it.id);
         const incompleteIds = items.filter((it) => isSpecIncomplete(it)).map((it) => it.id);
         const noImageIds = items.filter((it) => getItemImages(it).length === 0).map((it) => it.id);
 
         const matchesManageFilter = (it: ArchiveItem) => {
-          if (manageQualityFilter === "japanese" && !hasJapaneseText(it)) return false;
           if (manageQualityFilter === "duplicate" && !duplicateAllIds.has(it.id)) return false;
           if (manageQualityFilter === "incomplete" && !isSpecIncomplete(it)) return false;
           if (manageQualityFilter === "no-image" && getItemImages(it).length > 0) return false;
@@ -2603,17 +2504,6 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setManageQualityFilter("japanese")}
-                  className={`rounded-full border px-2.5 py-1 font-semibold ${
-                    manageQualityFilter === "japanese"
-                      ? "border-sky-700 bg-sky-600 text-white"
-                      : "border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100"
-                  }`}
-                >
-                  일본어 미번역 ({japaneseIds.length})
-                </button>
-                <button
-                  type="button"
                   onClick={() => setManageQualityFilter("duplicate")}
                   className={`rounded-full border px-2.5 py-1 font-semibold ${
                     manageQualityFilter === "duplicate"
@@ -2657,18 +2547,6 @@ export default function Home() {
                     className="rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1 text-[11px] font-bold text-rose-700 hover:bg-rose-100"
                   >
                     🧹 중복 사본만 자동 선택 ({duplicateExtraIds.length}건)
-                  </button>
-                )}
-                {japaneseIds.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setManageQualityFilter("japanese");
-                      setSelectedManageIds(japaneseIds);
-                    }}
-                    className="rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-800 hover:bg-sky-100"
-                  >
-                    🇰🇷 일본어 미번역 일괄 선택 ({japaneseIds.length}건)
                   </button>
                 )}
                 {incompleteIds.length > 0 && (
@@ -2747,17 +2625,9 @@ export default function Home() {
                 >
                   📦 배포용 데이터 저장
                 </button>
-                <button
-                  type="button"
-                  disabled={selectedManageIds.length === 0 || isTranslatingPosts || isRefreshingPosts}
-                  onClick={() => handleTranslateArchiveItems(selectedManageIds)}
-                  className="rounded-lg border border-sky-300 bg-sky-50 px-2.5 py-1.5 text-xs font-bold text-sky-800 hover:bg-sky-100 disabled:opacity-40"
-                >
-                  {isTranslatingPosts ? "🇰🇷 번역·윤문 중..." : `🇰🇷 선택 한국어 번역·다듬기 (${selectedManageIds.length}건)`}
-                </button>
 <button
                   type="button"
-                  disabled={selectedManageIds.length === 0 || isRefreshingPosts || isTranslatingPosts}
+                  disabled={selectedManageIds.length === 0 || isRefreshingPosts}
                   onClick={() => handleRefreshArchiveItems(selectedManageIds)}
                   className="rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-800 hover:bg-blue-100 disabled:opacity-40"
                 >
@@ -2839,11 +2709,6 @@ export default function Home() {
                             {it.hidden && (
                               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800">
                                 숨김됨
-                              </span>
-                            )}
-                            {hasJapaneseText(it) && (
-                              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800">
-                                일본어 포함
                               </span>
                             )}
                             {duplicateAllIds.has(it.id) && (
