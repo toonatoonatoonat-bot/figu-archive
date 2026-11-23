@@ -40,7 +40,6 @@ function applyPreGlossary(text: string): string {
 
 function polishKoreanKujiText(text: string): string {
   let out = text;
-
   const postFixes: [RegExp, string][] = [
     [/가장\s*복권|제일\s*복권|이치방\s*복권/g, "이치방쿠지"],
     [/마지막\s*하나\s*상|라스트\s*원\s*상/g, "라스트원상"],
@@ -62,11 +61,9 @@ function polishKoreanKujiText(text: string): string {
     [/([(\[])\s+/g, "$1"],
     [/[ \t]{2,}/g, " "],
   ];
-
   for (const [pattern, replacement] of postFixes) {
     out = out.replace(pattern, replacement);
   }
-
   return out
     .split("\n")
     .map((line) => line.trim())
@@ -78,26 +75,18 @@ function polishKoreanKujiText(text: string): string {
 async function translateJaToKo(text: string): Promise<string> {
   const trimmed = text.trim();
   if (!trimmed) return "";
-
   const preProcessed = applyPreGlossary(trimmed);
-
-  // 일본어(히라가나, 가타카나, 한자)가 전혀 없으면 윤문만 수행
   if (!/[\u3040-\u30ff\u4e00-\u9faf]/.test(preProcessed)) {
     return polishKoreanKujiText(preProcessed);
   }
-
   try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(
-      preProcessed
-    )}`;
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(preProcessed)}`;
     const res = await fetch(url, {
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
       },
     });
     if (!res.ok) return polishKoreanKujiText(preProcessed);
-
     const data = await res.json();
     if (Array.isArray(data?.[0])) {
       const translated = data[0]
@@ -116,11 +105,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const texts: string[] = Array.isArray(body?.texts) ? body.texts : [];
-
-    if (texts.length === 0) {
-      return NextResponse.json({ translations: [] });
-    }
-
+    if (texts.length === 0) return NextResponse.json({ translations: [] });
     const translations = await Promise.all(texts.map((t) => translateJaToKo(String(t || ""))));
     return NextResponse.json({ translations });
   } catch (error) {
