@@ -526,6 +526,57 @@ export default function Home() {
   const [importingSlug, setImportingSlug] = useState<string | null>(null);
 
   const [viewingItem, setViewingItem] = useState<ArchiveItem | null>(null);
+  const [isSingleRefreshing, setIsSingleRefreshing] = useState(false);
+
+  const handlePublicRefreshSingleItem = async (targetItem: ArchiveItem) => {
+    if (isSingleRefreshing) return;
+    const urlMatch = `${targetItem.content}\n${targetItem.summary}`.match(/https?:\/\/[^\s)>"']*1kuji\.com[^\s)>"']*/i);
+    const rawUrl = urlMatch ? urlMatch[0] : "";
+    if (!rawUrl) {
+      window.alert("공식 1kuji.com 링크가 연결되지 않은 게시물입니다.");
+      return;
+    }
+
+    setIsSingleRefreshing(true);
+    try {
+      const detailRes = await fetch(`/api/kuji-detail?url=${encodeURIComponent(rawUrl)}`);
+      if (!detailRes.ok) {
+        throw new Error("공식 데이터를 조회하지 못했습니다.");
+      }
+      const detail = await detailRes.json();
+
+      const patch = {
+        price: detail.priceText || targetItem.price,
+        lotTotal: detail.lotTotal || "",
+        maxPerTry: detail.maxPerTry || "",
+        offlineOpenDate: targetItem.offlineOpenDate || targetItem.releaseDate,
+        onlineOpenDate: detail.onlineOpenDate || "",
+        prizeCounts: detail.prizeCounts || "",
+        updatedAt: formatKstTimestamp(),
+      };
+
+      const saveRes = await fetch("/api/archive/refresh-item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: targetItem.id, patch }),
+      });
+      const saveData = await saveRes.json();
+
+      if (!saveRes.ok) {
+        window.alert(saveData.error || "최신 정보 갱신에 실패했습니다.");
+        return;
+      }
+
+      const merged = saveData.item as ArchiveItem;
+      setItems((prev) => prev.map((it) => (it.id === merged.id ? merged : it)));
+      setViewingItem(merged);
+      window.alert("최신 어소트 및 발매 정보가 동기화되었습니다!");
+    } catch (err: unknown) {
+      window.alert(err instanceof Error ? err.message : "갱신 중 오류가 발생했습니다.");
+    } finally {
+      setIsSingleRefreshing(false);
+    }
+  };
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
 
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -1711,7 +1762,15 @@ export default function Home() {
                   X(트위터) 어소트 검색 ↗
                 </a>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={isSingleRefreshing}
+                onClick={() => handlePublicRefreshSingleItem(viewingItem)}
+                className="rounded-lg border border-blue-300 bg-blue-50 px-3.5 py-2 font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              >
+                {isSingleRefreshing ? "동기화 중..." : "🔄 최신 정보 동기화"}
+              </button>
               {isAdmin && (<button
                 type="button"
                 onClick={() => openEditModal(viewingItem)}
