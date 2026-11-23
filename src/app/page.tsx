@@ -833,12 +833,13 @@ export default function Home() {
     setActiveSlideIdx(0);
   }, [viewingItem?.id]);
 
-  const handleLiveSearchKuji = async (customKeyword?: string) => {
+  const handleLiveSearchKuji = async (customKeyword?: string, brandOverride?: "전체" | KujiBrandType) => {
+    const activeBrand = brandOverride || liveSearchBrand;
     const q = (customKeyword !== undefined ? customKeyword : searchQuery).trim();
     setIsLiveSearchingKuji(true);
     setLiveKujiError(null);
     try {
-      const res = await fetch(`/api/kuji-search?q=${encodeURIComponent(q)}&brand=${encodeURIComponent(activeBrand)}&brand=${encodeURIComponent(activeBrand)}`);
+      const res = await fetch(`/api/kuji-search?q=${encodeURIComponent(q)}&brand=${encodeURIComponent(activeBrand)}`);
       const data = await res.json();
       if (!res.ok) {
         setLiveKujiError(data.error || "1kuji.com 최신 정보를 가져오지 못했습니다.");
