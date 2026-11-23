@@ -95,13 +95,55 @@ function getDisplayImageUrl(rawUrl: string): string {
   ) {
     return trimmed;
   }
-  return `/api/image-proxy?url=${encodeURIComponent(trimmed)}`;
+  return `/image-proxy?url=${encodeURIComponent(trimmed)}`;
 }
 
 function detectIsIchibanKuji(title: string, maker: string, price: string): boolean {
   return /이치방쿠지|제일복권|ichiban\s*kuji|一番くじ|마스터라이즈|masterlise/i.test(
     `${title} ${maker} ${price}`
   );
+}
+
+function getAssortTrustBadge(item: ArchiveItem): { label: string; className: string } | null {
+  const combined = `${item.lotTotal || ""} ${item.prizeCounts || ""}`.trim();
+  if (!combined) return null;
+  if (combined.includes("추정") || combined.includes("표준 기준")) {
+    return {
+      label: "⏳ 미공개 추정치",
+      className: "border-amber-200 bg-amber-50 text-amber-800",
+    };
+  }
+  if (combined.includes("실시간 조회")) {
+    return {
+      label: "⚡ 현지 어소트 수집",
+      className: "border-sky-200 bg-sky-50 text-sky-800",
+    };
+  }
+  return {
+    label: "✓ 스펙·혼입률 확정",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  };
+}
+
+function getReleaseStatusBadge(releaseDate: string): { label: string; className: string } | null {
+  const m = releaseDate.match(/(20\d{2})[.\-/년\s]*(\d{1,2})?(?:[.\-/월\s]*(\d{1,2}))?/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = m[2] ? Number(m[2]) : 12;
+  const day = m[3] ? Number(m[3]) : 28;
+
+  const now = new Date();
+  const kstNow = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const targetMs = Date.UTC(year, month - 1, day);
+  const diffDays = Math.floor((targetMs - kstNow.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays > 14) {
+    return { label: "발매 예정", className: "bg-indigo-50 text-indigo-700 border-indigo-200" };
+  }
+  if (diffDays >= -30) {
+    return { label: "발매 시즌", className: "bg-rose-50 text-rose-700 border-rose-200" };
+  }
+  return { label: "발매 완료", className: "bg-neutral-100 text-neutral-600 border-neutral-200" };
 }
 
 function is1kujiPageUrl(url: string): boolean {
@@ -1557,11 +1599,21 @@ export default function Home() {
                     <span className="text-neutral-400">구성 / 스케일</span>
                     <span className="font-medium text-neutral-700">{item.scale}</span>
                   </div>
-                  <div className="flex justify-between py-0.5">
+                  <div className="flex items-center justify-between py-0.5">
                     <span className="text-neutral-400">발매 / 구분</span>
-                    <span className="font-mono font-medium text-neutral-700">
-                      {item.releaseDate} · {item.price}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {(() => {
+                        const st = getReleaseStatusBadge(item.releaseDate);
+                        return st ? (
+                          <span className={`rounded border px-1.5 py-0.2 text-[10px] font-semibold ${st.className}`}>
+                            {st.label}
+                          </span>
+                        ) : null;
+                      })()}
+                      <span className="font-mono font-medium text-neutral-700">
+                        {item.releaseDate} · {item.price}
+                      </span>
+                    </div>
                   </div>
 
                   <div
@@ -1615,6 +1667,22 @@ export default function Home() {
                 <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
                   {viewingItem.category}
                 </span>
+                {(() => {
+                  const st = getReleaseStatusBadge(viewingItem.releaseDate);
+                  return st ? (
+                    <span className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${st.className}`}>
+                      {st.label}
+                    </span>
+                  ) : null;
+                })()}
+                {(() => {
+                  const trust = getAssortTrustBadge(viewingItem);
+                  return trust ? (
+                    <span className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${trust.className}`}>
+                      {trust.label}
+                    </span>
+                  ) : null;
+                })()}
                 {viewingItem.updatedAt && (
                   <span className="text-[11px] text-neutral-400">
                     · 업데이트 {viewingItem.updatedAt}
