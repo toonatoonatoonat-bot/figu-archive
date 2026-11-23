@@ -838,7 +838,7 @@ export default function Home() {
     setIsLiveSearchingKuji(true);
     setLiveKujiError(null);
     try {
-      const res = await fetch(`/api/kuji-search?q=${encodeURIComponent(q)}&brand=${encodeURIComponent(liveSearchBrand)}`);
+      const res = await fetch(`/api/kuji-search?q=${encodeURIComponent(q)}&brand=${encodeURIComponent(activeBrand)}&brand=${encodeURIComponent(activeBrand)}`);
       const data = await res.json();
       if (!res.ok) {
         setLiveKujiError(data.error || "1kuji.com 최신 정보를 가져오지 못했습니다.");
