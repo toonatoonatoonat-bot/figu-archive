@@ -124,6 +124,62 @@ function isSpecIncomplete(item: ArchiveItem): boolean {
   return false;
 }
 
+interface StructuredPrizeRow {
+  grade: string;
+  name: string;
+  count: string;
+  isTop: boolean;
+}
+
+function parseStructuredPrizeLineup(content: string, prizeCounts?: string): {
+  rows: StructuredPrizeRow[];
+  remainingContent: string;
+} {
+  const countMap = new Map<string, string>();
+  if (prizeCounts) {
+    const cleanCounts = prizeCounts.replace(/※.*$/, "");
+    for (const part of cleanCounts.split("/")) {
+      const m = part.trim().match(/^([A-Z]상|라스트원상|더블찬스상?)\s*(.+)$/i);
+      if (m) {
+        countMap.set(m[1].toUpperCase().replace("더블찬스상", "더블찬스"), m[2].trim());
+      }
+    }
+  }
+
+  const lines = content.split(/\r?\n/);
+  const rows: StructuredPrizeRow[] = [];
+  const otherLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      otherLines.push(line);
+      continue;
+    }
+    const m = trimmed.match(/^(?:[-•▪*]\s*)?([A-Z]상|라스트원상|라스트원|더블찬스상?|더블찬스)\s*[:：\-·]?\s*(.+)$/i);
+    if (m && m[2].trim().length >= 2) {
+      let rawGrade = m[1].toUpperCase();
+      if (rawGrade === "라스트원") rawGrade = "라스트원상";
+      if (rawGrade === "더블찬스상") rawGrade = "더블찬스";
+      const countVal = countMap.get(rawGrade) || "-";
+      const isTop = /^(A상|B상|C상|라스트원상)$/i.test(rawGrade);
+      rows.push({
+        grade: rawGrade,
+        name: m[2].trim(),
+        count: countVal,
+        isTop,
+      });
+    } else {
+      otherLines.push(line);
+    }
+  }
+
+  return {
+    rows,
+    remainingContent: otherLines.join("\n").replace(/\n{3,}/g, "\n\n").trim(),
+  };
+}
+
 function getAssortTrustBadge(item: ArchiveItem): { label: string; className: string } | null {
   const combined = `${item.lotTotal || ""} ${item.prizeCounts || ""}`.trim();
   if (!combined) return null;
@@ -1819,8 +1875,36 @@ export default function Home() {
                 </div>
                 {viewingItem.prizeCounts && (
                   <div className="mt-2.5 border-t border-neutral-200/80 pt-2.5">
-                    <span className="mb-1 block text-[11px] text-neutral-400">상별 수량 (혼입률)</span>
-                    <p className="whitespace-pre-line font-medium text-neutral-800">{viewingItem.prizeCounts}</p>
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span className="text-[11px] font-medium text-neutral-500">상별 수량 (혼입률)</span>
+                      {viewingItem.prizeCounts.includes("※") && (
+                        <span className="text-[10px] text-amber-700">
+                          {viewingItem.prizeCounts.slice(viewingItem.prizeCounts.indexOf("※"))}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {viewingItem.prizeCounts
+                        .replace(/※.*$/, "")
+                        .split("/")
+                        .map((part) => part.trim())
+                        .filter(Boolean)
+                        .map((chip, idx) => {
+                          const isTopPrize = /^(A상|B상|C상|라스트원)/i.test(chip);
+                          return (
+                            <span
+                              key={`${chip}-${idx}`}
+                              className={`rounded-md border px-2 py-1 text-[11px] font-semibold ${
+                                isTopPrize
+                                  ? "border-neutral-800 bg-neutral-900 text-white"
+                                  : "border-neutral-200 bg-white text-neutral-700"
+                              }`}
+                            >
+                              {chip}
+                            </span>
+                          );
+                        })}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1828,9 +1912,61 @@ export default function Home() {
             <p className="mt-3 rounded-lg bg-neutral-50 p-3.5 text-xs text-neutral-700">
               {viewingItem.summary}
             </p>
-            <div className="mt-6 whitespace-pre-line border-t border-neutral-100 pt-5 text-sm leading-relaxed text-neutral-700">
-              {viewingItem.content}
-            </div>
+            {(() => {
+              const parsedLineup = parseStructuredPrizeLineup(viewingItem.content, viewingItem.prizeCounts);
+              return (
+                <>
+                  {parsedLineup.rows.length >= 2 && (
+                    <div className="mt-5 overflow-hidden rounded-xl border border-neutral-200">
+                      <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3.5 py-2">
+                        <span className="text-xs font-bold text-neutral-800">🏆 경품 상세 라인업 ({parsedLineup.rows.length}종)</span>
+                        <span className="text-[11px] text-neutral-400">등급 · 구성 · 혼입 수량</span>
+                      </div>
+                      <table className="w-full border-collapse text-left text-xs">
+                        <thead>
+                          <tr className="border-b border-neutral-200 bg-neutral-50/50 text-[11px] text-neutral-500">
+                            <th className="w-24 px-3.5 py-2 font-semibold">등급</th>
+                            <th className="px-3.5 py-2 font-semibold">경품 구성</th>
+                            <th className="w-20 px-3.5 py-2 text-right font-semibold">수량</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-neutral-100">
+                          {parsedLineup.rows.map((row, idx) => (
+                            <tr
+                              key={`${row.grade}-${idx}`}
+                              className={row.isTop ? "bg-amber-50/35" : "bg-white"}
+                            >
+                              <td className="px-3.5 py-2.5 align-top">
+                                <span
+                                  className={`inline-block rounded px-2 py-0.5 text-[11px] font-bold ${
+                                    row.isTop
+                                      ? "bg-neutral-900 text-white"
+                                      : "border border-neutral-200 bg-neutral-100 text-neutral-700"
+                                  }`}
+                                >
+                                  {row.grade}
+                                </span>
+                              </td>
+                              <td className="px-3.5 py-2.5 font-medium leading-snug text-neutral-800">
+                                {row.name}
+                              </td>
+                              <td className="px-3.5 py-2.5 text-right font-mono font-semibold text-neutral-700">
+                                {row.count}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {parsedLineup.remainingContent && (
+                    <div className="mt-5 whitespace-pre-line border-t border-neutral-100 pt-4 text-sm leading-relaxed text-neutral-700">
+                      {parsedLineup.remainingContent}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
                         <div className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 pt-4 text-xs">
               <div className="flex flex-wrap items-center gap-2">
