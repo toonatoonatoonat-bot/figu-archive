@@ -1675,31 +1675,6 @@ export default function Home() {
           })}
         </div>
 
-        <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-neutral-200/70 pb-3">
-          <span className="mr-1 font-mono text-[11px] font-semibold text-neutral-400">BRAND:</span>
-          {(["전체", ...KUJI_BRAND_LIST] as const).map((brandName) => {
-            const visibleItems = items.filter((it) => !it.hidden);
-            const count =
-              brandName === "전체"
-                ? visibleItems.length
-                : visibleItems.filter((it) => resolveItemKujiBrand(it) === brandName).length;
-            return (
-              <button
-                key={brandName}
-                type="button"
-                onClick={() => setSelectedBrand(brandName)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-                  selectedBrand === brandName
-                    ? "border-neutral-900 bg-neutral-900 text-white"
-                    : "border-neutral-200 bg-white text-neutral-700 hover:border-neutral-400"
-                }`}
-              >
-                {brandName} ({count})
-              </button>
-            );
-          })}
-        </div>
-
         <div className="mb-3 flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-2">
             {seriesList.map((series) => (
