@@ -5,6 +5,17 @@ import React, { useEffect, useState } from "react";
 type CategoryType = "신제품" | "수집 가이드";
 type SortType = "latest" | "code" | "release-desc" | "release-asc" | "title";
 
+function formatKstTimestamp(): string {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const yyyy = kst.getUTCFullYear();
+  const mm = String(kst.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(kst.getUTCDate()).padStart(2, "0");
+  const hh = String(kst.getUTCHours()).padStart(2, "0");
+  const min = String(kst.getUTCMinutes()).padStart(2, "0");
+  return `${yyyy}.${mm}.${dd} ${hh}:${min}`;
+}
+
 interface ArchiveItem {
   id: string;
   code: string;
@@ -25,6 +36,7 @@ interface ArchiveItem {
   offlineOpenDate?: string;
   onlineOpenDate?: string;
   prizeCounts?: string;
+  updatedAt?: string;
 }
 
 interface SearchImageCandidate {
@@ -403,6 +415,7 @@ async function buildAutoPublishedArticle(
     offlineOpenDate: kuji.releaseDate,
     onlineOpenDate: autoOnlineOpenDate,
     prizeCounts: autoPrizeCounts,
+    updatedAt: formatKstTimestamp(),
   };
 }
 
@@ -955,6 +968,8 @@ export default function Home() {
                 offlineOpenDate: formData.offlineOpenDate.trim(),
                 onlineOpenDate: formData.onlineOpenDate.trim(),
                 prizeCounts: formData.prizeCounts.trim(),
+          updatedAt: formatKstTimestamp(),
+                updatedAt: formatKstTimestamp(),
               }
             : item
         )
@@ -981,6 +996,7 @@ export default function Home() {
           offlineOpenDate: formData.offlineOpenDate.trim(),
           onlineOpenDate: formData.onlineOpenDate.trim(),
           prizeCounts: formData.prizeCounts.trim(),
+          updatedAt: formatKstTimestamp(),
         },
         ...prev,
       ]);
@@ -1549,6 +1565,11 @@ export default function Home() {
                 <span className="rounded bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
                   {viewingItem.category}
                 </span>
+                {viewingItem.updatedAt && (
+                  <span className="text-[11px] text-neutral-400">
+                    · 업데이트 {viewingItem.updatedAt}
+                  </span>
+                )}
               </div>
               <button
                 type="button"
