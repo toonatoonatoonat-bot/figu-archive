@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 import { createClient } from "@supabase/supabase-js";
 import seedData from "@/data/archive-seed.json";
 import { autoTranslateArchiveItem, hasJapaneseChars } from "@/lib/ko-polisher";
@@ -55,10 +58,10 @@ export async function GET() {
             updated_at: new Date().toISOString(),
           });
       }
-      return NextResponse.json({ items: cleanedItems });
+      return NextResponse.json({ items: cleanedItems }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
     }
 
-    return NextResponse.json({ items: rawItems });
+    return NextResponse.json({ items: rawItems }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
   } catch {
     return NextResponse.json({ items: seedData });
   }
