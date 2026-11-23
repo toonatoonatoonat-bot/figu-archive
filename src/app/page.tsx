@@ -480,11 +480,12 @@ async function buildAutoPublishedArticle(
         });
       }
       if (detail.releaseText) releaseText = detail.releaseText;
-      if (detail.priceText) priceText = detail.priceText;
+      if (detail.priceText) {
+        priceText = detail.priceText;
+        autoPriceText = detail.priceText;
+      }
       if (detail.storeText) storeText = detail.storeText;
       if (detail.description) description = detail.description;
-      if (detail.priceText) autoPriceText = detail.priceText;
-      if (detail.priceText) autoPriceText = detail.priceText;
       if (Array.isArray(detail.prizes)) prizes = detail.prizes;
       if (detail.lotTotal) autoLotTotal = detail.lotTotal;
       if (detail.maxPerTry) autoMaxPerTry = detail.maxPerTry;
@@ -495,25 +496,82 @@ async function buildAutoPublishedArticle(
     // 기본 데이터 유지
   }
 
-  // 타이틀 앞부분의 매장/온라인 판매 및 발매일 안내 잡문구 제거 후 순수 쿠지 타이틀 추출
+  // 1. 브랜드 및 제조사 먼저 판별
+  const detectedBrand: KujiBrandType =
+    kuji.kujiBrand ||
+    resolveItemKujiBrand({
+      title: kuji.title,
+      maker: kuji.maker,
+      content: kuji.sourceUrl,
+    });
+
+  const brandMetaMap: Record<KujiBrandType, { maker: string; jpLabel: string }> = {
+    "이치방쿠지": { maker: "반다이 스피리츠 (BANDAI SPIRITS)", jpLabel: "一番くじ" },
+    "세가 럭키 쿠지": { maker: "SEGA (세가)", jpLabel: "セガ ラッキーくじ" },
+    "모두의 쿠지": { maker: "FuRyu (후류)", jpLabel: "みんなのくじ" },
+    "아타리 쿠지": { maker: "Sanrio (산리오)", jpLabel: "サンリオ当りくじ" },
+    "타이토 쿠지": { maker: "TAITO (타이토)", jpLabel: "タイトーくじ" },
+    "해피쿠지": { maker: "Sunny Side Up (써니사이드업)", jpLabel: "Happyくじ" },
+    "애니쿠지": { maker: "Animate (애니메이트)", jpLabel: "アニくじ / くじメイト" },
+  };
+  const brandMeta = brandMetaMap[detectedBrand] || brandMetaMap["이치방쿠지"];
+  const detectedMaker = kuji.maker || brandMeta.maker;
+
+  // 2. 제목에서 보도자료 타임스탬프(2025年11月21日 12時06分), 말줄임표(...), 잡문구 제거
   const cleanRawTitle = (() => {
-    const raw = kuji.title.trim();
+    let raw = kuji.title
+      .replace(/\s*20\d{2}年\d{1,2}月\d{1,2}日\s*\d{1,2}時\d{1,2}分\s*$/g, "")
+      .replace(/\s*\.\.\.\s*$/g, "")
+      .replace(/\s*…\s*$/g, "")
+      .trim();
+
     const kujiIdx = raw.indexOf("一番くじ");
     if (kujiIdx > 0) return raw.slice(kujiIdx).trim();
-    return raw
+
+    raw = raw
       .replace(/^(?:店頭販売|オンライン販売|ダブルチャンスキャンペーン|メーカー希望小売価格)\s*/g, "")
       .replace(/^\d{4}年\d{1,2}月(?:\d{1,2}日\([^)]+\)|[上中下]旬)?(?:より)?(?:順次)?発売予定\s*/g, "")
-      .replace(/^(?:店頭販売|オンライン販売)\s*/g, "")
-      .trim() || raw;
+      .replace(/^20\d{2}年に販売した/g, "")
+      .trim();
+
+    return raw || kuji.title.trim();
   })();
 
-  // 일본어 제목 · 본문 · 경품 라인업 일괄 한국어 번역
-  let koTitle = cleanRawTitle;
+  // 3. 기본 일본어 쿠지 용어 사전 치환 (번역 API 보조)
+  const fallbackJpToKo = (text: string): string => {
+    if (!text) return "";
+    return text
+      .replace(/とある科学の超電磁砲T/g, "어떤 과학의 초전자포 T")
+      .replace(/とある科学の超電磁砲/g, "어떤 과학의 초전자포")
+      .replace(/オンラインくじ/g, "온라인 쿠지")
+      .replace(/くじメイト/g, "쿠지메이트")
+      .replace(/アニくじ/g, "애니쿠지")
+      .replace(/セガ\s*ラッキーくじ/g, "세가 럭키 쿠지")
+      .replace(/みんなのくじ/g, "모두의 쿠지")
+      .replace(/タイトーくじ/g, "타이토 쿠지")
+      .replace(/Happyくじ/gi, "해피쿠지")
+      .replace(/当りくじ|当たりくじ/g, "아타리 쿠지")
+      .replace(/一番くじ/g, "이치방쿠지")
+      .replace(/発売決定[！!]?/g, "발매 결정")
+      .replace(/発売開始[！!]?/g, "발매 개시")
+      .replace(/販売開始[！!]?/g, "판매 개시")
+      .replace(/新登場[！!]?/g, "신규 출시")
+      .replace(/登場[！!]?/g, "출시")
+      .replace(/発売/g, "발매")
+      .replace(/販売/g, "판매")
+      .replace(/が「/g, " - 「")
+      .replace(/」が/g, "」 ")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  // 4. 일본어 제목 · 본문 · 경품 라인업 일괄 한국어 번역
+  let koTitle = fallbackJpToKo(cleanRawTitle);
   let koReleaseText = releaseText;
   let koPriceText = priceText;
   let koStoreText = storeText;
-  let koDescription = description;
-  let koPrizes = [...prizes];
+  let koDescription = fallbackJpToKo(description);
+  let koPrizes = prizes.map(fallbackJpToKo);
 
   try {
     const textsToTranslate = [
@@ -532,39 +590,57 @@ async function buildAutoPublishedArticle(
     if (tRes.ok) {
       const tData = await tRes.json();
       if (Array.isArray(tData.translations) && tData.translations.length >= 5) {
-        koTitle = tData.translations[0] || cleanRawTitle;
+        if (tData.translations[0] && tData.translations[0].trim() !== cleanRawTitle) {
+          koTitle = fallbackJpToKo(tData.translations[0]);
+        }
         koReleaseText = tData.translations[1] || releaseText;
         koPriceText = tData.translations[2] || priceText;
         koStoreText = tData.translations[3] || storeText;
-        koDescription = tData.translations[4] || description;
+        if (tData.translations[4]) {
+          koDescription = fallbackJpToKo(tData.translations[4]);
+        }
         if (prizes.length > 0) {
-          koPrizes = tData.translations.slice(5, 5 + prizes.length);
+          koPrizes = tData.translations
+            .slice(5, 5 + prizes.length)
+            .map((t: string, idx: number) => fallbackJpToKo(t || prizes[idx]));
         }
       }
     }
   } catch {
-    // 번역 실패 시 원문 유지
+    // 번역 실패 시 사전 기반 번역 유지
   }
 
-  // 쿠지 타이틀: 한국어 번역 + 일본어 원문 병기
+  // 5. 가격 정규화 (브랜드명이 가격 칸에 들어가는 오류 차단)
+  const normalizedPrice = (() => {
+    const candidate = autoPriceText || koPriceText || kuji.price || "";
+    const yenMatch = candidate.match(/([0-9,]{3,5})\s*(?:円|엔)/);
+    if (yenMatch) return `1회 ${yenMatch[1]}엔`;
+    if (/[0-9]/.test(candidate)) return candidate;
+    return "가격 미정";
+  })();
+
+  // 6. 쿠지 타이틀: 한국어 번역 우선 + 일본어 원문 깔끔 병기
   const bilingualTitle =
     koTitle && koTitle.trim() !== cleanRawTitle
       ? `${koTitle.trim()} (${cleanRawTitle})`
       : cleanRawTitle;
 
-  const parsedYear = extractYear(kuji.releaseDate) || "2027";
+  const parsedYear = extractYear(kuji.releaseDate) || "2026";
   const seqStr = String(codeNumber).padStart(3, "0");
   const topPrizesPreview =
     koPrizes.length > 0 ? koPrizes.slice(0, 3).join(" / ") : `${kuji.series} 공식 신작 라인업`;
 
+  // 7. 브랜드별 맞춤 시리즈 개요 및 본문 생성
   const contentLines: string[] = [
     `■ 시리즈 개요`,
-    `반다이 스피리츠(BANDAI SPIRITS)의 '이치방쿠지(一番くじ)' 공식 라인업으로 공개된 「${bilingualTitle}」 신작 정보입니다.`,
+    `${detectedMaker}의 '${detectedBrand}(${brandMeta.jpLabel})' 공식 라인업으로 공개된 「${bilingualTitle}」 신작 정보입니다.`,
     ``,
     `■ 발매 및 판매 정보`,
+    `• 브랜드 / 제조사: ${detectedBrand} · ${detectedMaker}`,
     `• 발매 일정: ${koReleaseText}`,
-    `• 권장 가격: ${koPriceText}`,
+    `• 권장 가격: ${normalizedPrice}`,
   ];
+  if (koStoreText) contentLines.push(`• 주요 취급처: ${koStoreText}`);
   contentLines.push(`• 공식 페이지: ${kuji.sourceUrl}`);
   if (koDescription) contentLines.push(``, `■ 공식 소개`, koDescription);
   if (koPrizes.length > 0) {
@@ -572,28 +648,6 @@ async function buildAutoPublishedArticle(
     koPrizes.forEach((p) => contentLines.push(`• ${p}`));
   }
 
-  const detectedBrand: KujiBrandType =
-    kuji.kujiBrand ||
-    resolveItemKujiBrand({
-      title: `${kuji.title} ${koTitle}`,
-      maker: kuji.maker,
-      content: kuji.sourceUrl,
-    });
-  const detectedMaker =
-    kuji.maker ||
-    (detectedBrand === "세가 럭키 쿠지"
-      ? "SEGA (세가)"
-      : detectedBrand === "모두의 쿠지"
-        ? "FuRyu (후류)"
-        : detectedBrand === "아타리 쿠지"
-          ? "Sanrio (산리오)"
-          : detectedBrand === "타이토 쿠지"
-            ? "TAITO (타이토)"
-            : detectedBrand === "해피쿠지"
-              ? "Sunny Side Up (써니사이드업)"
-              : detectedBrand === "애니쿠지"
-                ? "Animate (애니메이트)"
-                : "반다이 스피리츠 (BANDAI SPIRITS)");
   return {
     id: `auto-post-${kuji.slug}-${Date.now()}-${codeNumber}`,
     code: `FIG-${parsedYear}-${seqStr}`,
@@ -604,8 +658,8 @@ async function buildAutoPublishedArticle(
     maker: detectedMaker,
     scale: koPrizes.length > 0 ? `경품 ${koPrizes.length}종 라인업` : "경품 라인업 (논스케일)",
     releaseDate: kuji.releaseDate,
-    price: autoPriceText || (kuji.price && kuji.price !== "이치방쿠지" ? kuji.price : "가격 미정"),
-    summary: `[${detectedBrand} 신작 리포트] ${kuji.releaseDate} 발매 예정 · ${topPrizesPreview} 등 총 ${images.length}컷 피규어 화보 수록.`,
+    price: normalizedPrice,
+    summary: `[${detectedBrand} 신작 리포트] ${kuji.releaseDate} 발매 · ${topPrizesPreview} 등 총 ${images.length}컷 화보 수록.`,
     content: contentLines.join("\n"),
     images,
     imageUrl: images[0] || "",
@@ -617,7 +671,6 @@ async function buildAutoPublishedArticle(
     updatedAt: formatKstTimestamp(),
   };
 }
-
 export default function Home() {
   const DEFAULT_ARCHIVE: ArchiveItem[] = Array.isArray(seedData) && seedData.length > 0 ? (seedData as ArchiveItem[]) : INITIAL_DATA;
   const [items, setItems] = useState<ArchiveItem[]>(DEFAULT_ARCHIVE);
