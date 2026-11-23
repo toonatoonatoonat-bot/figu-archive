@@ -37,17 +37,24 @@ export async function GET() {
 
     const rawItems = data.data as Record<string, unknown>[];
     if (rawItems.some(needsAutoClean)) {
-      const cleanedItems = await Promise.all(
-        rawItems.map((it) => (needsAutoClean(it) ? autoTranslateArchiveItem(it) : Promise.resolve(it)))
-      );
-      const adminSupabase = createClient(supabaseUrl, serviceKey);
-      await adminSupabase
-        .from("archive_store")
-        .upsert({
-          id: "main",
-          data: cleanedItems,
-          updated_at: new Date().toISOString(),
-        });
+      let processed = 0;
+      const cleanedItems = [...rawItems];
+      for (let i = 0; i < cleanedItems.length; i++) {
+        if (needsAutoClean(cleanedItems[i]) && processed < 6) {
+          cleanedItems[i] = await autoTranslateArchiveItem(cleanedItems[i]);
+          processed++;
+        }
+      }
+      if (processed > 0) {
+        const adminSupabase = createClient(supabaseUrl, serviceKey);
+        await adminSupabase
+          .from("archive_store")
+          .upsert({
+            id: "main",
+            data: cleanedItems,
+            updated_at: new Date().toISOString(),
+          });
+      }
       return NextResponse.json({ items: cleanedItems });
     }
 

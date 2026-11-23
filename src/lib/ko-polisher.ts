@@ -30,7 +30,6 @@ const PRE_GLOSSARY: [RegExp, string][] = [
   [/取扱店/g, "취급점"],
   [/店頭販売/g, "매장 판매"],
   [/オンライン販売/g, "온라인 판매"],
-  // 인기 시리즈 및 캐릭터 고유명사
   [/ぼっち・ざ・ろっく！|ぼっち・ざ・ろっく!/g, "봇치 더 록!"],
   [/後藤ひとり/g, "고토 히토리"],
   [/伊地知虹夏/g, "이지치 니지카"],
@@ -59,10 +58,9 @@ export function hasJapaneseChars(text: string): boolean {
 export function clean1kujiNoise(text: string): string {
   if (!text) return "";
   let out = text;
-  // 공홈 상단 메뉴/푸터 노이즈 제거
   out = out.replace(/(?:未定|미정)\s*(?:商品カテゴリー|상품\s*카테고리)[^\n]*/g, "추후 공개");
-  out = out.replace(/[•\-*]?\s*(?:ダブルチャンス|더블\s*찬스)[^\n]*(?:挑戦方法|도전\s*방법|会員登録|회원\s*등록|LINEアカウント|公式ショップ)[^\n]*\n?/g, "");
-  out = out.replace(/(?:ダブルチャンス|더블\s*찬스)[^\n/]*(?:挑戦方法|도전\s*방법|会員登録|회원\s*등록)[^\n/]*\/?\s*/g, "");
+  out = out.replace(/[•\-*]?\s*(?:ダブルチャンス|더블\s*찬스)[^\n]*(?:挑戦方法|도전\s*방법|会員登録|회원\s*등록|LINEアカウント|公式ショップ|発売日[～~]|店舗の事情により)[^\n]*\n?/g, "");
+  out = out.replace(/(?:ダブルチャンス|더블\s*찬스)[^\n/]*(?:挑戦方法|도전\s*방법|会員登録|회원\s*등록|発売日[～~]|店舗の事情により)[^\n/]*\/?\s*/g, "");
   out = out.replace(/税込\s*10%/g, "세금 10% 포함");
   return out;
 }
@@ -118,6 +116,9 @@ export function polishKoreanKujiText(text: string): string {
     .split("\n")
     .map((line) => {
       let trimmed = line.trim();
+      // 괄호 안에 동일한 한국어 제목이 한 번 더 반복된 경우 정리 (예: "이치방쿠지 X (이치방쿠지 X)")
+      trimmed = trimmed.replace(/^(.{6,60})\s*\(\1\)$/, "$1");
+      // 경품 줄 내 중복 텍스트 제거
       const dupLineMatch = trimmed.match(/^([•\-*]?\s*(?:[A-Z]상|라스트원상)\s*:\s*)(.+?)\s+(?:[A-Z]상|라스트원상)\s+.+?(\s*\[피규어\])?$/);
       if (dupLineMatch) {
         trimmed = `${dupLineMatch[1]}${dupLineMatch[2].trim()}${dupLineMatch[3] || ""}`;
@@ -129,6 +130,27 @@ export function polishKoreanKujiText(text: string): string {
     .trim();
 
   return out;
+}
+
+async function fetchGoogleTranslate(q: string): Promise<string> {
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(q)}`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+    },
+  });
+  if (!res.ok) return q;
+  const data = await res.json();
+  if (Array.isArray(data?.[0])) {
+    return (
+      data[0]
+        .map((seg: unknown) => (Array.isArray(seg) && typeof seg[0] === "string" ? seg[0] : ""))
+        .join("")
+        .trim() || q
+    );
+  }
+  return q;
 }
 
 export async function autoTranslateAndPolish(text: string): Promise<string> {
@@ -145,26 +167,15 @@ export async function autoTranslateAndPolish(text: string): Promise<string> {
   }
 
   try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ko&dt=t&q=${encodeURIComponent(
-      preProcessed
-    )}`;
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-      },
-    });
-    if (!res.ok) return polishKoreanKujiText(preProcessed);
-
-    const data = await res.json();
-    if (Array.isArray(data?.[0])) {
-      const translated = data[0]
-        .map((seg: unknown) => (Array.isArray(seg) && typeof seg[0] === "string" ? seg[0] : ""))
-        .join("")
-        .trim();
-      return polishKoreanKujiText(translated || preProcessed);
-    }
-    return polishKoreanKujiText(preProcessed);
+    // 줄 단위로 나누어 번역해야 긴 본문에서도 중간 일본어가 누락되지 않음
+    const lines = preProcessed.split("\n");
+    const translatedLines = await Promise.all(
+      lines.map(async (line) => {
+        if (!line.trim() || !hasJapaneseChars(line)) return line;
+        return await fetchGoogleTranslate(line);
+      })
+    );
+    return polishKoreanKujiText(translatedLines.join("\n"));
   } catch {
     return polishKoreanKujiText(preProcessed);
   }
@@ -193,6 +204,11 @@ export async function autoTranslateArchiveItem<T extends Record<string, unknown>
     if (typeof val === "string" && val.trim()) {
       next[f] = await autoTranslateAndPolish(val);
     }
+  }
+
+  // 제목 끝의 중복 괄호 표기 정리 (예: "제목 (제목)")
+  if (typeof next.title === "string") {
+    next.title = next.title.replace(/^(.{5,70})\s*\(\1\)$/, "$1").trim();
   }
 
   if (typeof next.content === "string") {
