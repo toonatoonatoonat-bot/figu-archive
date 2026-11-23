@@ -68,7 +68,7 @@ function stripHtml(html: string): string {
     .replace(/<[^>]+>/g, " ")
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+    .replace(/&#39;|&#x27;|&apos;/gi, "'").replace(/&#x2F;/gi, "/")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/\s+/g, " ")
@@ -459,7 +459,7 @@ export async function GET(request: NextRequest) {
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaPrTimes(`みんなのくじ ${jpQuery}`.trim(), {
+        searchBrandViaPrTimes(`みんなのくじ フリュー ${jpQuery}`.trim(), {
           slugPrefix: "minkuji",
           kujiBrand: "모두의 쿠지",
           maker: "FuRyu (후류)",
@@ -535,18 +535,18 @@ export async function GET(request: NextRequest) {
               kujiBrand: "아타리 쿠지",
               maker: "Sanrio (산리오)",
               defaultSeries: "산리오 캐릭터즈",
-              titleKeywordFilter: /当たりくじ/,
+              titleKeywordFilter: /当た?りくじ/,
             })
           )
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaPrTimes(`サンリオ 当たりくじ ${jpQuery}`.trim(), {
+        searchBrandViaPrTimes(`当りくじ ${jpQuery}`.trim(), {
           slugPrefix: "sanrio",
           kujiBrand: "아타리 쿠지",
           maker: "Sanrio (산리오)",
           defaultSeries: "산리오 캐릭터즈",
-          mustMatchTitle: /当たりくじ/,
+          mustMatchTitle: /当た?りくじ/,
         })
       );
     }
@@ -572,7 +572,7 @@ export async function GET(request: NextRequest) {
           .catch(() => [])
       );
       fetchTasks.push(
-        searchBrandViaPrTimes(`アニくじ ${jpQuery}`.trim(), {
+        searchBrandViaPrTimes(`アニくじ アニメイト ${jpQuery}`.trim(), {
           slugPrefix: "anikuji",
           kujiBrand: "애니쿠지",
           maker: "Animate (애니메이트)",
@@ -614,7 +614,19 @@ export async function GET(request: NextRequest) {
       return getDateSortScore(b.releaseDate) - getDateSortScore(a.releaseDate);
     });
 
-    const finalSliced = await hydrateMissingThumbnails(filteredMerged.slice(0, 120));
+    const balancedMerged =
+      brandFilter === "전체"
+        ? (() => {
+            const perBrandCount = new Map<string, number>();
+            return filteredMerged.filter((it) => {
+              const cnt = perBrandCount.get(it.kujiBrand) || 0;
+              if (cnt >= 30) return false;
+              perBrandCount.set(it.kujiBrand, cnt + 1);
+              return true;
+            });
+          })()
+        : filteredMerged;
+    const finalSliced = await hydrateMissingThumbnails(balancedMerged.slice(0, 150));
     return NextResponse.json({
       query: jpQuery || `${brandFilter} 통합 라인업`,
       items: finalSliced,
