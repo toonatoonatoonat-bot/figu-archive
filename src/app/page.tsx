@@ -968,7 +968,6 @@ export default function Home() {
                 offlineOpenDate: formData.offlineOpenDate.trim(),
                 onlineOpenDate: formData.onlineOpenDate.trim(),
                 prizeCounts: formData.prizeCounts.trim(),
-          updatedAt: formatKstTimestamp(),
                 updatedAt: formatKstTimestamp(),
               }
             : item
